@@ -179,6 +179,10 @@ class MonkeyCodeClient:
         """获取当前登录用户信息（get_user_status 别名）。"""
         return self.get_user_status()
 
+    def is_logged_in(self) -> bool:
+        """是否已有登录态（含从 session_path 加载的持久化会话）。"""
+        return self._logged_in
+
     def logout(self) -> Any:
         """退出当前用户会话（清除云端登录态并删除本地会话文件）。"""
         result = self._request("POST", "/api/v1/users/logout")
