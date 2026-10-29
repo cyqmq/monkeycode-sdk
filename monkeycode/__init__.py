@@ -21,7 +21,7 @@ from monkeycode.models import (
     VMResource,
 )
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 __all__ = [
     "MonkeyCodeClient",

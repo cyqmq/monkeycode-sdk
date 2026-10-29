@@ -32,6 +32,7 @@ images = client.list_images()
 models = client.list_models()
 
 # 创建任务（默认档位：public_host / opencode / 2核8GB3小时）
+# repo 可空：不绑定 Git 仓库也能创建任务
 task = client.create_task(
     content="修复登录接口的异常处理",
     repo=RepoReq(repo_url="https://github.com/org/repo", branch="main"),

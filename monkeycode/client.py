@@ -240,7 +240,7 @@ class MonkeyCodeClient:
     def create_task(
         self,
         content: str,
-        repo: RepoReq,
+        repo: RepoReq | None = None,
         host_id: str = "public_host",
         image_id: str | None = None,
         model_id: str | None = None,
@@ -257,10 +257,11 @@ class MonkeyCodeClient:
     ) -> Task:
         """创建任务。
 
-        必填：content / repo。host_id 默认 public_host；
-        image_id / model_id 留空时自动取列表第一个可用项；
+        必填：content。repo 可空（不绑定 Git 仓库也能创建任务）；
+        host_id 默认 public_host；image_id / model_id 留空时自动取列表第一个可用项；
         资源默认 2 核 / 8GB / 3 小时（桌面端默认档位）。
         """
+        repo = repo or RepoReq(repo_url="")
         if not image_id:
             images = self.list_images()
             if not images:
