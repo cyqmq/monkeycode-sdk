@@ -29,6 +29,7 @@ from monkeycode.models import (
     TaskStreamChunk,
     VMResource,
 )
+from monkeycode.links import check_url_status, collect_preview_links
 from monkeycode.pow import solve
 from monkeycode.stream import TaskStream
 
@@ -599,6 +600,33 @@ class MonkeyCodeClient:
                 return last
             time.sleep(interval)
         raise TaskError(f"等待任务 {task_id} 超时（{timeout}s），最后状态：{last.status}")
+
+    # ---------- 预览链接 ----------
+
+    def list_task_links(
+        self, task_id: str, check_alive: bool = True, max_pages: int = 500
+    ) -> list[dict[str, Any]]:
+        """列出任务中 AI 拉起的预览链接，并检测存活状态。
+
+        返回 [{url, count, status, http_code}]，按出现次数降序。
+        status 取值：在线 / 异常 / 已关闭（check_alive=False 时为 None）。
+        """
+        counts = collect_preview_links(self.get_task_rounds, task_id, max_pages)
+        result: list[dict[str, Any]] = []
+        for url, count in sorted(counts.items(), key=lambda x: -x[1]):
+            status: str | None = None
+            http_code: int | None = None
+            if check_alive:
+                status, http_code = check_url_status(url)
+            result.append(
+                {
+                    "url": url,
+                    "count": count,
+                    "status": status,
+                    "http_code": http_code,
+                }
+            )
+        return result
 
     # ---------- WebSocket 会话交互 ----------
 

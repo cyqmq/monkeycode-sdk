@@ -107,6 +107,9 @@ client.list_folders(vm_id, path="/root")
 client.upload_file(vm_id, "/root", file_path="local.txt")
 client.upload_file(vm_id, "/root", file_bytes=b"content", filename="a.txt")
 data = client.download_file(vm_id, "/root", "a.txt")
+
+# 预览链接
+links = client.list_task_links(task_id)  # [{url, count, status, http_code}]
 ```
 
 ## 命令行验证

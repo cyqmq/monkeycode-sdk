@@ -75,6 +75,19 @@ def cmd_run(client: MonkeyCodeClient, content: str) -> None:
     print_json(result.raw)
 
 
+def cmd_links(client: MonkeyCodeClient, task_id: str) -> None:
+    """列出任务中的预览链接并检测存活状态。"""
+    links = client.list_task_links(task_id, check_alive=True)
+    if not links:
+        print("未在任务轮次中发现预览链接。")
+        return
+    for item in links:
+        status = item["status"] or "未检测"
+        code = item["http_code"]
+        code_str = f" HTTP {code}" if code else ""
+        print(f"{status}{code_str}  {item['url']}  (x{item['count']})")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="MonkeyCode SDK CLI")
     parser.add_argument(
@@ -92,6 +105,9 @@ def main() -> None:
     run_p = sub.add_parser("run", help="创建任务并轮询结果")
     run_p.add_argument("content", help="任务内容（自然语言）")
 
+    links_p = sub.add_parser("links", help="列出任务中的预览链接并检测存活")
+    links_p.add_argument("task_id", help="任务 ID")
+
     args = parser.parse_args()
     email, password = get_credentials()
     with MonkeyCodeClient(email=email, password=password, base_url=args.base_url) as client:
@@ -108,6 +124,8 @@ def main() -> None:
             print_json(client.list_models())
         elif args.command == "run":
             cmd_run(client, args.content)
+        elif args.command == "links":
+            cmd_links(client, args.task_id)
 
 
 if __name__ == "__main__":
