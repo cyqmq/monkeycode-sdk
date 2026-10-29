@@ -10,8 +10,18 @@ from monkeycode.errors import (
     RateLimitError,
     TaskError,
 )
+from monkeycode.models import (
+    APIKeyInfo,
+    CaptchaChallenge,
+    CaptchaVerification,
+    RepoReq,
+    Task,
+    TaskExtraConfig,
+    TaskRound,
+    VMResource,
+)
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = [
     "MonkeyCodeClient",
@@ -20,4 +30,12 @@ __all__ = [
     "CaptchaRequiredError",
     "RateLimitError",
     "TaskError",
+    "APIKeyInfo",
+    "CaptchaChallenge",
+    "CaptchaVerification",
+    "RepoReq",
+    "Task",
+    "TaskExtraConfig",
+    "TaskRound",
+    "VMResource",
 ]

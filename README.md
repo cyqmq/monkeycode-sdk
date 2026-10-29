@@ -31,18 +31,26 @@ hosts = client.list_hosts()
 images = client.list_images()
 models = client.list_models()
 
-# 创建任务
+# 创建任务（默认档位：public_host / opencode / 2核8GB3小时）
 task = client.create_task(
     content="修复登录接口的异常处理",
     repo=RepoReq(repo_url="https://github.com/org/repo", branch="main"),
-    host_id=hosts[0]["id"],
-    image_id=images[0]["id"],
-    model_id=models[0]["id"],
+    skill_ids=["feature-design", "project-wiki"],
 )
+
+# 任务列表与过程
+tasks = client.list_tasks(status="pending,processing")
+rounds = client.get_task_rounds(task.id)
+user_inputs = client.get_task_user_inputs(task.id)
 
 # 轮询结果
 result = client.wait_task(task.id, timeout=1800, interval=10)
 print(result.status, result.pr_url)
+
+# OhMyAgent API Key（明文仅返回一次，立即保存）
+key = client.create_api_key()
+print(key.api_key)
+client.delete_api_key(key.key_id)
 ```
 
 ## 命令行验证

@@ -20,10 +20,12 @@ from monkeycode.errors import (
     TaskError,
 )
 from monkeycode.models import (
+    APIKeyInfo,
     CaptchaChallenge,
     CaptchaVerification,
     RepoReq,
     Task,
+    TaskExtraConfig,
     VMResource,
 )
 
@@ -160,21 +162,37 @@ class MonkeyCodeClient:
         self,
         content: str,
         repo: RepoReq,
-        host_id: str,
-        image_id: str,
-        model_id: str,
+        host_id: str = "public_host",
+        image_id: str | None = None,
+        model_id: str | None = None,
         resource: VMResource | None = None,
         task_type: TaskType = TaskType.DEVELOP,
         sub_type: TaskSubType | None = None,
-        cli_name: CliName | None = None,
+        cli_name: CliName = CliName.OPENCODE,
         git_identity_id: str | None = None,
         system_prompt: str | None = None,
-        extra: dict[str, Any] | None = None,
+        skill_ids: list[str] | None = None,
+        plugin_ids: list[str] | None = None,
+        project_id: str | None = None,
+        issue_id: str | None = None,
     ) -> Task:
         """创建任务。
 
-        必填：content / repo / host_id / image_id / model_id / resource。
+        必填：content / repo。host_id 默认 public_host；
+        image_id / model_id 留空时自动取列表第一个可用项；
+        资源默认 2 核 / 8GB / 3 小时（桌面端默认档位）。
         """
+        if not image_id:
+            images = self.list_images()
+            if not images:
+                raise TaskError("没有可用的镜像（images），请先在控制台创建镜像。")
+            image_id = images[0]["id"]
+        if not model_id:
+            models = self.list_models()
+            if not models:
+                raise TaskError("没有可用的模型（models），请先在控制台配置模型。")
+            model_id = models[0]["id"]
+
         body: dict[str, Any] = {
             "content": content,
             "repo": repo.to_dict(),
@@ -192,15 +210,82 @@ class MonkeyCodeClient:
             body["git_identity_id"] = git_identity_id
         if system_prompt:
             body["system_prompt"] = system_prompt
+        extra = TaskExtraConfig(
+            skill_ids=skill_ids,
+            plugin_ids=plugin_ids,
+            project_id=project_id,
+            issue_id=issue_id,
+        ).to_dict()
         if extra:
             body["extra"] = extra
         data = self._request("POST", "/api/v1/users/tasks", json=body)
         return Task.from_dict(data)
 
+    def list_tasks(
+        self,
+        page: int | None = None,
+        size: int | None = None,
+        status: str | None = None,
+        project_id: str | None = None,
+        quick_start: str | None = None,
+        next_token: str | None = None,
+    ) -> Any:
+        """任务列表。
+
+        返回接口原始 data（通常为 {"tasks": [...], "page": {...}} 或列表），
+        支持状态筛选：status 多值用逗号分隔，如 "pending,processing"。
+        """
+        params: dict[str, Any] = {}
+        if page is not None:
+            params["page"] = page
+        if size is not None:
+            params["size"] = size
+        if status is not None:
+            params["status"] = status
+        if project_id is not None:
+            params["project_id"] = project_id
+        if quick_start is not None:
+            params["quick_start"] = quick_start
+        if next_token is not None:
+            params["next_token"] = next_token
+        return self._request("GET", "/api/v1/users/tasks", params=params)
+
     def get_task(self, task_id: str) -> Task:
         """获取任务详情。"""
         data = self._request("GET", f"/api/v1/users/tasks/{task_id}")
         return Task.from_dict(data)
+
+    def get_task_rounds(
+        self,
+        task_id: str,
+        cursor: str | None = None,
+        limit: int = 2,
+        direction: str = "backward",
+        inclusive: bool | None = None,
+    ) -> Any:
+        """查询任务历史轮次。"""
+        params: dict[str, Any] = {
+            "id": task_id,
+            "limit": limit,
+            "direction": direction,
+        }
+        if cursor is not None:
+            params["cursor"] = cursor
+        if inclusive is not None:
+            params["inclusive"] = inclusive
+        return self._request("GET", "/api/v1/users/tasks/rounds", params=params)
+
+    def get_task_user_inputs(
+        self,
+        task_id: str,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> Any:
+        """查询任务用户输入列表。"""
+        params: dict[str, Any] = {"id": task_id, "limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        return self._request("GET", "/api/v1/users/tasks/user-inputs", params=params)
 
     def stop_task(self, task_id: str) -> dict[str, Any]:
         """停止任务。"""
@@ -233,6 +318,22 @@ class MonkeyCodeClient:
             time.sleep(interval)
         raise TaskError(f"等待任务 {task_id} 超时（{timeout}s），最后状态：{last.status}")
 
+    # ---------- OhMyAgent API Key ----------
+
+    def create_api_key(self) -> APIKeyInfo:
+        """创建 OhMyAgent API Key。
+
+        注意：明文 api_key 仅在本次响应中返回，调用方应立即安全保存。
+        该 Key 用于 OhMyAgent 代理（LLM 请求的 model 字段传模型配置 ID），
+        不是 REST API 的会话凭证。
+        """
+        data = self._request("POST", "/api/v1/users/ohmyagent/api-keys", json={})
+        return APIKeyInfo.from_dict(data)
+
+    def delete_api_key(self, key_id: str) -> Any:
+        """按 Key ID 删除当前用户的 OhMyAgent API Key。"""
+        return self._request("DELETE", f"/api/v1/users/ohmyagent/api-keys/{key_id}")
+
     # ---------- 内部请求 ----------
 
     def _request(
@@ -240,10 +341,11 @@ class MonkeyCodeClient:
         method: str,
         path: str,
         json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
         auth_required: bool = True,
     ) -> Any:
         try:
-            resp = self._client.request(method, path, json=json)
+            resp = self._client.request(method, path, json=json, params=params)
         except httpx.HTTPError as exc:
             raise APIError(f"请求失败：{exc}") from exc
 

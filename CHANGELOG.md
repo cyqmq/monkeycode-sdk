@@ -1,5 +1,17 @@
 # 更新日志
 
+## [0.1.2] - 2026-10-25
+
+### 新增
+- `create_task` 内置**默认建任务档位**：`host_id="public_host"`、`cli_name=opencode`、资源默认 2核/8GB/3小时；`image_id/model_id` 留空时自动取列表第一个
+- 支持任务扩展配置：`skill_ids` / `plugin_ids` / `project_id` / `issue_id`（写入 `extra`）
+- 新增 `list_tasks`（支持 page/size/status/project_id/quick_start/next_token 筛选）
+- 新增 `get_task_rounds`、`get_task_user_inputs`（任务过程查询）
+- 新增 `create_api_key` / `delete_api_key`（OhMyAgent API Key 管理）
+
+### 变更
+- 新增数据模型：`TaskExtraConfig`、`TaskRound`、`APIKeyInfo`；`Task` 增加 title/summary/branch/model/image/extra 等属性
+
 ## [0.1.1] - 2026-10-25
 
 ### 修复
