@@ -5,7 +5,7 @@
     export MONKEYCODE_EMAIL=you@example.com
     export MONKEYCODE_PASSWORD=your_password
 
-    python cli.py login                 # 登录（如遇验证码会提示输入答案）
+    python cli.py login                 # 登录（PoW 验证码自动求解）
     python cli.py list-hosts             # 列出云端环境
     python cli.py list-images            # 列出镜像
     python cli.py list-models            # 列出模型
@@ -20,7 +20,6 @@ import sys
 
 from monkeycode import (
     AuthenticationError,
-    CaptchaRequiredError,
     MonkeyCodeClient,
     TaskError,
 )
@@ -41,25 +40,9 @@ def print_json(obj) -> None:
 
 
 def interactive_login(client: MonkeyCodeClient) -> None:
-    """登录，如遇验证码则交互式输入答案。"""
+    """登录（PoW 验证码由 SDK 自动求解）。"""
     try:
         client.login()
-        print("登录成功（无需验证码）")
-        return
-    except CaptchaRequiredError:
-        print("登录需要验证码，正在创建质询...")
-        challenge = client.create_captcha()
-        print("验证码 challenge 信息：")
-        print_json(challenge.raw)
-        print("请查看验证码并输入答案（多个答案用英文逗号分隔，如: 1,2,3）：")
-        raw = input("> ").strip()
-        solutions = [int(x.strip()) for x in raw.split(",") if x.strip()]
-        result = client.redeem_captcha(challenge.token, solutions)
-        if not result.success:
-            print(f"验证码兑换失败：{result.message}")
-            sys.exit(1)
-        print("验证码兑换成功，正在登录...")
-        client.login(captcha_token=result.token)
         print("登录成功")
     except AuthenticationError as e:
         print(f"登录失败：{e}")

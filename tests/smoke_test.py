@@ -49,12 +49,10 @@ def check(name: str, fn):
 
 def do_login(client: MonkeyCodeClient) -> None:
     try:
-        client.login()
-        print(f"{PASS} 登录（无需验证码）")
-        return
-    except CaptchaRequiredError:
-        print(f"{FAIL} 登录需要验证码（challenge 参数 c/s/d 需客户端渲染，当前未实现）")
-        print("     请先在 MonkeyCode 网页端确认可登录，验证码渲染是下一步待解决项。")
+        client.login()  # PoW 验证码由 SDK 自动求解
+        print(f"{PASS} 登录成功（PoW 验证码自动求解）")
+    except AuthenticationError as e:
+        print(f"{FAIL} 登录失败：{e}")
         raise
 
 

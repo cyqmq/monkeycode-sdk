@@ -28,6 +28,7 @@ from monkeycode.models import (
     TaskExtraConfig,
     VMResource,
 )
+from monkeycode.pow import solve
 
 DEFAULT_BASE_URL = "https://monkeycode-ai.com"
 SESSION_COOKIE = "monkeycode_ai_session"
@@ -69,16 +70,28 @@ class MonkeyCodeClient:
     # ---------- 认证 ----------
 
     def login(self, captcha_token: str | None = None) -> dict[str, Any]:
-        """使用邮箱 + 密码登录。
+        """使用邮箱 + 密码登录，自动处理 PoW 验证码。
 
         生产平台 monkeycode-ai.com 使用 bcrypt 校验，需传**明文密码**；
         早期/部分私有化部署可能要求 MD5，可用 password_md5=True 兼容。
 
-        云平台可能启用验证码：先调用 create_captcha / redeem_captcha 获取
-        captcha_token 后传入。登录成功后自动保存会话 Cookie。
+        云平台强制启用验证码（SHA-256 前缀碰撞），本方法会自动：
+        challenge -> 本地求解 -> redeem -> 携带 captcha_token 登录。
+        也可以显式传入 captcha_token 跳过自动求解。
+        登录成功后自动保存会话 Cookie。
         """
         if not self.email or not self._password:
             raise AuthenticationError("缺少邮箱或密码，请在构造客户端时传入。")
+        try:
+            return self._login_request(captcha_token)
+        except CaptchaRequiredError:
+            if captcha_token:
+                raise
+            token = self._solve_captcha()
+            return self._login_request(token)
+
+    def _login_request(self, captcha_token: str | None) -> dict[str, Any]:
+        """发送登录请求。"""
         password = _md5(self._password) if self._password_md5_mode else self._password
         body: dict[str, Any] = {
             "email": self.email,
@@ -89,15 +102,26 @@ class MonkeyCodeClient:
         try:
             data = self._request("POST", "/api/v1/users/password-login", json=body)
         except AuthenticationError as exc:
-            # 403 且无 captcha_token 时提示需要验证码
             if exc.code == 403 and not captcha_token:
                 raise CaptchaRequiredError(
-                    "登录需要验证码，请先调用 create_captcha/redeem_captcha 获取 captcha_token。",
+                    "登录需要验证码。",
                     code=403,
                 ) from exc
             raise
         self._logged_in = True
         return data
+
+    def _solve_captcha(self) -> str:
+        """自动完成 PoW 验证码：challenge -> 本地求解 -> redeem。"""
+        challenge = self.create_captcha()
+        c = int(challenge.raw["challenge"]["c"])
+        s = int(challenge.raw["challenge"]["s"])
+        d = int(challenge.raw["challenge"]["d"])
+        solutions = solve(challenge.token, c, s, d)
+        result = self.redeem_captcha(challenge.token, solutions)
+        if not result.success:
+            raise AuthenticationError(f"验证码兑换失败：{result.message}")
+        return result.token
 
     def create_captcha(self) -> CaptchaChallenge:
         """创建验证码质询。"""
