@@ -88,6 +88,17 @@ def cmd_links(client: MonkeyCodeClient, task_id: str) -> None:
         print(f"{status}{code_str}  {item['url']}  (x{item['count']})")
 
 
+def cmd_whoami(client: MonkeyCodeClient) -> None:
+    """显示当前登录账户信息。"""
+    print_json(client.whoami())
+
+
+def cmd_logout(client: MonkeyCodeClient) -> None:
+    """退出当前会话。"""
+    client.logout()
+    print("已退出登录")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="MonkeyCode SDK CLI")
     parser.add_argument(
@@ -98,6 +109,8 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("login", help="登录并保存会话")
+    sub.add_parser("whoami", help="显示当前登录账户信息")
+    sub.add_parser("logout", help="退出当前会话")
     sub.add_parser("list-hosts", help="列出云端环境")
     sub.add_parser("list-images", help="列出镜像")
     sub.add_parser("list-models", help="列出模型")
@@ -116,7 +129,11 @@ def main() -> None:
             return
         # 列表/任务命令需要登录态
         interactive_login(client)
-        if args.command == "list-hosts":
+        if args.command == "whoami":
+            cmd_whoami(client)
+        elif args.command == "logout":
+            cmd_logout(client)
+        elif args.command == "list-hosts":
             print_json(client.list_hosts())
         elif args.command == "list-images":
             print_json(client.list_images())

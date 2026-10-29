@@ -213,6 +213,14 @@ class ControlStream:
         msg = {"type": "call", "kind": kind, "data": b64e(inner)}
         await self._ws.send(json.dumps(msg, ensure_ascii=False))
 
+    async def send_raw(self, ctype: str, data: str = "") -> None:
+        """发送任意类型控制消息（非 call 调用，如 sync-my-ip）。
+
+        data 为原始字符串，会原样放入外层 data 字段。
+        """
+        msg = {"type": ctype, "data": data}
+        await self._ws.send(json.dumps(msg, ensure_ascii=False))
+
     async def recv(self, timeout: float | None = None) -> TaskStreamChunk:
         """读取并解码一条控制通道事件。"""
         raw = await asyncio.wait_for(self._ws.recv(), timeout=timeout)
@@ -295,6 +303,77 @@ class TerminalStream:
             self._ws = None
 
     async def __aenter__(self) -> "TerminalStream":
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.close()
+
+
+class JoinTerminalStream:
+    """加入共享终端流（WebSocket）。
+
+    端点：/api/v1/users/hosts/vms/terminals/join
+    需要分享密码（share_terminal 返回的 password）。
+
+    上行/下行消息格式与 TerminalStream 一致（data / resize / 心跳）。
+    """
+
+    def __init__(
+        self,
+        client: Any,
+        terminal_id: str,
+        password: str,
+        col: int = 80,
+        row: int = 24,
+    ) -> None:
+        self.client = client
+        self.terminal_id = terminal_id
+        self.password = password
+        self.col = col
+        self.row = row
+        self._ws: Any = None
+
+    def _url(self) -> str:
+        path = "/api/v1/users/hosts/vms/terminals/join"
+        params = [
+            f"terminal_id={self.terminal_id}",
+            f"password={self.password}",
+            f"col={self.col}",
+            f"row={self.row}",
+        ]
+        return _ws_url(self.client.base_url, f"{path}?{'&'.join(params)}")
+
+    async def connect(self) -> None:
+        """建立 WebSocket 连接（携带登录 Cookie）。"""
+        self._ws = await websockets.connect(
+            self._url(), additional_headers=_session_headers(self.client)
+        )
+
+    async def send_data(self, data: bytes | str) -> None:
+        """发送终端输入（字符串或字节）。"""
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        msg = {"type": "data", "data": b64e(data)}
+        await self._ws.send(json.dumps(msg, ensure_ascii=False))
+
+    async def send_resize(self, col: int, row: int) -> None:
+        """调整终端尺寸。"""
+        inner = json.dumps({"col": col, "row": row})
+        msg = {"type": "resize", "data": b64e(inner)}
+        await self._ws.send(json.dumps(msg, ensure_ascii=False))
+
+    async def recv(self, timeout: float | None = None) -> TaskStreamChunk:
+        """读取并解码一条终端事件（data 自动 base64 解码）。"""
+        raw = await asyncio.wait_for(self._ws.recv(), timeout=timeout)
+        return decode_chunk(raw)
+
+    async def close(self) -> None:
+        if self._ws is not None:
+            await self._ws.close()
+            self._ws = None
+
+    async def __aenter__(self) -> "JoinTerminalStream":
         await self.connect()
         return self
 

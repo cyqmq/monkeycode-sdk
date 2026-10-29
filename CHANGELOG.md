@@ -1,5 +1,15 @@
 # 更新日志
 
+## [1.3.0] - 2026-10-29
+
+### 新增（剩余缺失功能补全，总计 ~166 方法）
+- **用户/会话**：`get_user_status` / `whoami` / `logout` / `team_logout` / `team_list_conversations`
+- **密码重置辅助**：`get_reset_password_account`
+- **直接上传**：`upload_object`（POST /api/v1/uploader，multipart 直传）
+- **任务控制调用封装**：`switch_task_agent_resources`（技能/插件）、`restart_task`、`list_task_repo_files`、`read_task_repo_file`、`get_task_repo_diff`、`get_task_repo_changes`、`sync_client_ip`
+- **共享终端**：`join_terminal`（WebSocket，密码加入）
+- **CLI**：新增 `whoami` / `logout` 命令
+
 ## [1.2.0] - 2026-10-29
 
 ### 新增（配置管理补全，+17 方法，总计 152）

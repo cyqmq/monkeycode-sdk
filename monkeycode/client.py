@@ -32,7 +32,12 @@ from monkeycode.models import (
 )
 from monkeycode.links import check_url_status, collect_preview_links
 from monkeycode.pow import solve
-from monkeycode.stream import ControlStream, TaskStream, TerminalStream
+from monkeycode.stream import (
+    ControlStream,
+    JoinTerminalStream,
+    TaskStream,
+    TerminalStream,
+)
 
 DEFAULT_BASE_URL = "https://monkeycode-ai.com"
 SESSION_COOKIE = "monkeycode_ai_session"
@@ -153,6 +158,32 @@ class MonkeyCodeClient:
             expires=int(data.get("expires") or 0),
             raw=data,
         )
+
+    # ---------- 用户状态 / 退出登录 ----------
+
+    def get_user_status(self) -> Any:
+        """获取当前登录用户身份/状态（whoami 底层接口）。"""
+        return self._request("GET", "/api/v1/users/status")
+
+    def whoami(self) -> Any:
+        """获取当前登录用户信息（get_user_status 别名）。"""
+        return self.get_user_status()
+
+    def logout(self) -> Any:
+        """退出当前用户会话（清除云端登录态）。"""
+        result = self._request("POST", "/api/v1/users/logout")
+        self._logged_in = False
+        return result
+
+    def team_logout(self) -> Any:
+        """退出团队管理员会话。"""
+        result = self._request("POST", "/api/v1/teams/users/logout")
+        self._logged_in = False
+        return result
+
+    def team_list_conversations(self) -> Any:
+        """获取团队 agent 会话列表（管理端）。"""
+        return self._request("GET", "/api/v1/teams/conversations")
 
     # ---------- 服务器配置 / 团队登录 ----------
 
@@ -768,6 +799,23 @@ class MonkeyCodeClient:
             )
         return presigned
 
+    def upload_object(
+        self,
+        filename: str,
+        file_bytes: bytes,
+        usage: str = "attachment",
+    ) -> Any:
+        """直接 multipart 上传文件对象（POST /api/v1/uploader）。
+
+        与 presign 路径（upload_attachment）互补；usage 按平台约定
+        传入（如 attachment / avatar 等）。
+        """
+        return self._request(
+            "POST",
+            "/api/v1/uploader",
+            files={"file": (filename, file_bytes)},
+            params={"usage": usage},
+        )
 
     # ---------- 扩展 / 管理功能（覆盖完整 API，按需使用） ----------
 
@@ -894,6 +942,12 @@ class MonkeyCodeClient:
     def reset_password(self, token: str, new_password: str) -> Any:
         """重置密码。"""
         return self._request("PUT", "/api/v1/users/passwords/reset", json={"token": token, "new_password": new_password})
+
+    def get_reset_password_account(self, token: str) -> Any:
+        """用重置链接中的 token 查询账户信息（网页重置用）。"""
+        return self._request(
+            "GET", f"/api/v1/users/passwords/accounts/{token}"
+        )
 
     def update_git_bot(self, **fields: Any) -> Any:
         """更新 Git Bot。"""
@@ -1446,6 +1500,149 @@ class MonkeyCodeClient:
         return TerminalStream(
             self, vm_id, terminal_id=terminal_id, col=col, row=row
         )
+
+    def join_terminal(
+        self,
+        terminal_id: str,
+        password: str,
+        col: int = 80,
+        row: int = 24,
+    ) -> JoinTerminalStream:
+        """加入共享终端（WebSocket 上下文管理器）。
+
+        使用 share_terminal() 返回的分享密码加入他人终端。
+        """
+        return JoinTerminalStream(
+            self, terminal_id, password=password, col=col, row=row
+        )
+
+    # ---------- 任务控制调用（WebSocket control 专用封装） ----------
+
+    async def _task_control_call(
+        self,
+        task_id: str,
+        kind: str,
+        data: dict[str, Any],
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """通用控制通道调用：发送 call 并等待 call-response。"""
+        stream = ControlStream(self, task_id)
+        await stream.connect()
+        try:
+            await stream.send_call(kind, data)
+            while True:
+                chunk = await stream.recv(timeout=timeout)
+                if chunk.type == "call-response":
+                    result = chunk.data
+                    if isinstance(result, dict):
+                        return result
+                    return {"success": False, "error": str(result)}
+                if chunk.type == "error":
+                    return {"success": False, "error": str(chunk.data)}
+        finally:
+            await stream.close()
+
+    async def switch_task_agent_resources(
+        self,
+        task_id: str,
+        skill_ids: list[str] | None = None,
+        plugin_ids: list[str] | None = None,
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """运行中全量更新任务的技能/插件列表（kind=switch_agent_resources）。"""
+        return await self._task_control_call(
+            task_id,
+            "switch_agent_resources",
+            {
+                "skill_ids": skill_ids or [],
+                "plugin_ids": plugin_ids or [],
+            },
+            timeout=timeout,
+        )
+
+    async def restart_task(
+        self,
+        task_id: str,
+        load_session: bool = True,
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """重启任务，可选加载历史会话（kind=restart）。"""
+        return await self._task_control_call(
+            task_id,
+            "restart",
+            {"load_session": load_session},
+            timeout=timeout,
+        )
+
+    async def list_task_repo_files(
+        self,
+        task_id: str,
+        path: str = "",
+        glob_pattern: str = "*",
+        include_hidden: bool = True,
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """列出任务仓库文件（kind=repo_file_list）。"""
+        return await self._task_control_call(
+            task_id,
+            "repo_file_list",
+            {
+                "path": path,
+                "glob_pattern": glob_pattern,
+                "include_hidden": include_hidden,
+            },
+            timeout=timeout,
+        )
+
+    async def read_task_repo_file(
+        self,
+        task_id: str,
+        path: str,
+        offset: int = 0,
+        length: int = 1024 * 1024,
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """读取任务仓库文件（kind=repo_read_file，默认前 1MB）。"""
+        return await self._task_control_call(
+            task_id,
+            "repo_read_file",
+            {"path": path, "offset": offset, "length": length},
+            timeout=timeout,
+        )
+
+    async def get_task_repo_diff(
+        self, task_id: str, path: str, timeout: float = 30.0
+    ) -> dict[str, Any]:
+        """获取任务仓库文件 diff（kind=repo_file_diff）。"""
+        return await self._task_control_call(
+            task_id, "repo_file_diff", {"path": path}, timeout=timeout
+        )
+
+    async def get_task_repo_changes(
+        self, task_id: str, timeout: float = 30.0
+    ) -> dict[str, Any]:
+        """获取任务仓库变更列表（kind=repo_file_changes）。"""
+        return await self._task_control_call(
+            task_id, "repo_file_changes", {}, timeout=timeout
+        )
+
+    async def sync_client_ip(
+        self, task_id: str, ip: str, timeout: float = 30.0
+    ) -> dict[str, Any]:
+        """上报客户端 IP（控制通道上行消息 sync-my-ip，Web 前端用）。
+
+        通过 ControlStream.send_raw 发送非 call 消息；返回收到的
+        下一条事件（可能是 call-response / error / 心跳）。
+        """
+        stream = ControlStream(self, task_id)
+        await stream.connect()
+        try:
+            inner = json.dumps({"ip": ip}, ensure_ascii=False)
+            await stream.send_raw("sync-my-ip", b64e(inner))
+            chunk = await stream.recv(timeout=timeout)
+            return {"success": chunk.type != "error", "event": chunk.raw}
+        finally:
+            await stream.close()
 
     # ---------- OhMyAgent API Key ----------
 
