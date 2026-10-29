@@ -1,5 +1,13 @@
 # 更新日志
 
+## [0.1.8] - 2026-10-25
+
+### 新增
+- **文件管理**：
+  - `list_folders(vm_id, path)`：虚拟机目录列表
+  - `upload_file(vm_id, path, file_path | file_bytes+filename)`：上传文件到 VM
+  - `download_file(vm_id, path, filename)`：下载 VM 文件内容（bytes）
+
 ## [0.1.7] - 2026-10-25
 
 ### 新增

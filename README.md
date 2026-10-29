@@ -101,6 +101,12 @@ client.add_git_identity(access_token="...", base_url="https://github.com", email
 client.list_git_bots()
 client.create_git_bot(host_id="...", platform="github", token="...")
 client.list_git_bot_tasks(git_bot_id)
+
+# 文件管理（VM）
+client.list_folders(vm_id, path="/root")
+client.upload_file(vm_id, "/root", file_path="local.txt")
+client.upload_file(vm_id, "/root", file_bytes=b"content", filename="a.txt")
+data = client.download_file(vm_id, "/root", "a.txt")
 ```
 
 ## 命令行验证

@@ -390,6 +390,53 @@ class MonkeyCodeClient:
             params["size"] = size
         return self._request("GET", "/api/v1/users/git-bots/tasks", params=params)
 
+    # ---------- 文件管理 ----------
+
+    def list_folders(self, vm_id: str, path: str = "") -> Any:
+        """列出虚拟机目录。"""
+        params: dict[str, Any] = {"id": vm_id, "path": path}
+        return self._request("GET", "/api/v1/users/folders", params=params)
+
+    def upload_file(
+        self,
+        vm_id: str,
+        path: str,
+        file_path: str | None = None,
+        file_bytes: bytes | None = None,
+        filename: str | None = None,
+    ) -> Any:
+        """上传文件到 VM 的绝对路径。
+
+        file_path 和 (file_bytes, filename) 二选一。
+        """
+        if file_path is None and file_bytes is None:
+            raise ValueError("请提供 file_path 或 file_bytes。")
+        params: dict[str, Any] = {"id": vm_id, "path": path}
+        if file_path is not None:
+            import os
+
+            fname = filename or os.path.basename(file_path)
+            with open(file_path, "rb") as f:
+                files: dict[str, Any] = {"file": (fname, f)}
+                return self._request(
+                    "POST",
+                    "/api/v1/users/files/upload",
+                    params=params,
+                    files=files,
+                )
+        files = {"file": (filename or "file", file_bytes)}
+        return self._request(
+            "POST", "/api/v1/users/files/upload", params=params, files=files
+        )
+
+    def download_file(self, vm_id: str, path: str, filename: str) -> bytes:
+        """下载 VM 中的文件，返回字节内容。"""
+        params: dict[str, Any] = {"id": vm_id, "path": path, "filename": filename}
+        resp = self._client.get("/api/v1/users/files/download", params=params)
+        if resp.status_code != 200:
+            raise APIError(f"下载失败（HTTP {resp.status_code}）：{resp.text[:200]}")
+        return resp.content
+
     # ---------- 任务 ----------
 
     def create_task(
@@ -613,9 +660,12 @@ class MonkeyCodeClient:
         json: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
         auth_required: bool = True,
+        files: dict[str, Any] | None = None,
     ) -> Any:
         try:
-            resp = self._client.request(method, path, json=json, params=params)
+            resp = self._client.request(
+                method, path, json=json, params=params, files=files
+            )
         except httpx.HTTPError as exc:
             raise APIError(f"请求失败：{exc}") from exc
 
