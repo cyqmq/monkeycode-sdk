@@ -230,12 +230,165 @@ class MonkeyCodeClient:
             return data.get("models") or []
         return data or []
 
-    def list_projects(self) -> list[dict[str, Any]]:
-        """获取项目（仓库）列表。"""
-        data = self._request("GET", "/api/v1/users/projects")
+    def list_projects(
+        self, cursor: str | None = None, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """获取项目（仓库）列表，支持分页。"""
+        params: dict[str, Any] = {}
+        if cursor:
+            params["cursor"] = cursor
+        if limit is not None:
+            params["limit"] = limit
+        data = self._request("GET", "/api/v1/users/projects", params=params)
         if isinstance(data, dict):
             return data.get("projects") or []
         return data or []
+
+    def create_project(
+        self,
+        name: str,
+        repo_url: str,
+        platform: str = "github",
+        git_identity_id: str | None = None,
+        image_id: str | None = None,
+        description: str | None = None,
+        env_variables: dict[str, Any] | None = None,
+    ) -> Any:
+        """创建项目（仓库关联）。"""
+        body: dict[str, Any] = {
+            "name": name,
+            "repo_url": repo_url,
+            "platform": platform,
+        }
+        if git_identity_id:
+            body["git_identity_id"] = git_identity_id
+        if image_id:
+            body["image_id"] = image_id
+        if description:
+            body["description"] = description
+        if env_variables:
+            body["env_variables"] = env_variables
+        return self._request("POST", "/api/v1/users/projects", json=body)
+
+    def get_project_tree(
+        self,
+        project_id: str,
+        path: str = "",
+        ref: str | None = None,
+        recursive: bool | None = None,
+    ) -> Any:
+        """获取项目仓库树。"""
+        params: dict[str, Any] = {"path": path}
+        if ref:
+            params["ref"] = ref
+        if recursive is not None:
+            params["recursive"] = recursive
+        return self._request(
+            "GET", f"/api/v1/users/projects/{project_id}/tree", params=params
+        )
+
+    def get_project_file(
+        self, project_id: str, path: str, ref: str | None = None
+    ) -> Any:
+        """获取项目文件内容。"""
+        params: dict[str, Any] = {"path": path}
+        if ref:
+            params["ref"] = ref
+        return self._request(
+            "GET", f"/api/v1/users/projects/{project_id}/tree/blob", params=params
+        )
+
+    def list_project_issues(
+        self, project_id: str, cursor: str | None = None, limit: int | None = None
+    ) -> Any:
+        """获取项目 Issue 列表。"""
+        params: dict[str, Any] = {}
+        if cursor:
+            params["cursor"] = cursor
+        if limit is not None:
+            params["limit"] = limit
+        return self._request(
+            "GET", f"/api/v1/users/projects/{project_id}/issues", params=params
+        )
+
+    # ---------- 钱包 / 签到 ----------
+
+    def get_wallet(self) -> Any:
+        """查询钱包（积分余额）。"""
+        return self._request("GET", "/api/v1/users/wallet")
+
+    def checkin(self) -> Any:
+        """每日签到（自动求解 PoW 验证码）。"""
+        token = self._solve_captcha()
+        return self._request(
+            "POST", "/api/v1/users/wallet/checkin", json={"captcha_token": token}
+        )
+
+    def get_subscription(self) -> Any:
+        """查询会员订阅信息。"""
+        return self._request("GET", "/api/v1/users/subscription")
+
+    # ---------- Git 身份 / Git Bots ----------
+
+    def list_git_identities(self) -> Any:
+        """获取 Git 身份列表。"""
+        return self._request("GET", "/api/v1/users/git-identities")
+
+    def add_git_identity(
+        self,
+        access_token: str,
+        base_url: str,
+        email: str,
+        platform: str,
+        username: str,
+        remark: str | None = None,
+        organization_id: str | None = None,
+    ) -> Any:
+        """添加 Git 身份。"""
+        body: dict[str, Any] = {
+            "access_token": access_token,
+            "base_url": base_url,
+            "email": email,
+            "platform": platform,
+            "username": username,
+        }
+        if remark:
+            body["remark"] = remark
+        if organization_id:
+            body["organization_id"] = organization_id
+        return self._request("POST", "/api/v1/users/git-identities", json=body)
+
+    def list_git_bots(self) -> Any:
+        """获取 Git Bot 列表。"""
+        return self._request("GET", "/api/v1/users/git-bots")
+
+    def create_git_bot(
+        self,
+        host_id: str,
+        platform: str,
+        token: str,
+        name: str | None = None,
+    ) -> Any:
+        """创建 Git Bot。"""
+        body: dict[str, Any] = {
+            "host_id": host_id,
+            "platform": platform,
+            "token": token,
+        }
+        if name:
+            body["name"] = name
+        return self._request("POST", "/api/v1/users/git-bots", json=body)
+
+    def list_git_bot_tasks(
+        self, git_bot_id: str, page: int | None = None, size: int | None = None
+    ) -> Any:
+        """获取 Git Bot 任务列表。"""
+        params: dict[str, Any] = {"id": git_bot_id}
+        if page is not None:
+            params["page"] = page
+        if size is not None:
+            params["size"] = size
+        return self._request("GET", "/api/v1/users/git-bots/tasks", params=params)
 
     # ---------- 任务 ----------
 

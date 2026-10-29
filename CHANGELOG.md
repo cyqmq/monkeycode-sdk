@@ -1,5 +1,13 @@
 # 更新日志
 
+## [0.1.7] - 2026-10-25
+
+### 新增
+- **钱包/签到**：`get_wallet()`、`checkin()`（每日签到自动 PoW）、`get_subscription()`
+- **项目管理**：`create_project()`、`get_project_tree()`、`get_project_file()`、`list_project_issues()`；`list_projects()` 支持分页
+- **Git 身份**：`list_git_identities()`、`add_git_identity()`
+- **Git Bots**：`list_git_bots()`、`create_git_bot()`、`list_git_bot_tasks()`
+
 ## [0.1.6] - 2026-10-25
 
 ### 新增

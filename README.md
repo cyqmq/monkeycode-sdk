@@ -80,6 +80,29 @@ async def main():
 asyncio.run(main())
 ```
 
+## 更多功能
+
+```python
+# 钱包 / 签到
+wallet = client.get_wallet()          # 积分余额
+client.checkin()                      # 每日签到（自动 PoW）
+sub = client.get_subscription()       # 会员状态
+
+# 项目管理
+projects = client.list_projects()
+client.create_project(name="my-repo", repo_url="https://github.com/org/repo", platform="github")
+tree = client.get_project_tree(project_id, path="", ref="main")
+content = client.get_project_file(project_id, path="README.md", ref="main")
+issues = client.list_project_issues(project_id)
+
+# Git 身份 / Git Bots
+client.list_git_identities()
+client.add_git_identity(access_token="...", base_url="https://github.com", email="...", platform="github", username="...")
+client.list_git_bots()
+client.create_git_bot(host_id="...", platform="github", token="...")
+client.list_git_bot_tasks(git_bot_id)
+```
+
 ## 命令行验证
 
 ```bash

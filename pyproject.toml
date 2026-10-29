@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monkeycode-sdk"
-version = "0.1.6"
+version = "0.1.7"
 description = "MonkeyCode 云平台 REST API 的 Python SDK（认证、任务提交、结果轮询）"
 readme = "README.md"
 requires-python = ">=3.10"
