@@ -1,5 +1,16 @@
 # 更新日志
 
+## [1.6.0] - 2026-10-29
+
+### 新增（体验层改进）
+- **CLI 命令扩展**（+18 个）：任务（list-tasks/task-info/task-stop/task-delete/send-msg）、钱包（wallet/checkin/wallet-tx）、项目/环境（list-projects/options/vms/terminal）、API Key（api-key create/delete）、模型（list-available-models/list-model-providers）、会话控制（switch-model/restart）
+- **分页 helper**：`paginate` 通用迭代器 + `iter_tasks` / `iter_projects`
+- **错误友好化**：10606 登录失败、10205 主机不可调度等错误码附加中文提示
+- **重试机制**：只读请求网络抖动自动重试（指数退避）；429 按 Retry-After 等待重试
+- **冒烟测试扩展**：只读接口全覆盖（whoami/钱包/订阅/插件/技能/Git/MCP/通知/模型供应商/社区/团队读取）
+- **示例代码**：新增 `examples/` 8 个可运行示例（快速开始/发消息/换模型/终端/钱包签到/Git/团队管理/会话持久化）
+- **文档**：新增 `docs/API.md` 方法索引表
+
 ## [1.5.0] - 2026-10-29
 
 ### 新增（团队管理控制面补全，+34 方法，总计 202）

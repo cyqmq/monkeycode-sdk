@@ -50,6 +50,27 @@ def _md5(text: str) -> str:
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
+_RETRYABLE_METHODS = {"GET", "HEAD", "OPTIONS"}
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 1.0
+
+_FRIENDLY_ERRORS: dict[int, str] = {
+    10606: "邮箱或密码错误",
+    10205: "云端宿主不可调度，请到控制台检查云端环境",
+}
+
+
+def _friendly_error(code: int | str | None, message: str) -> str:
+    """将已知业务错误码替换为更友好的提示。"""
+    try:
+        hint = _FRIENDLY_ERRORS.get(int(code))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return message
+    if hint:
+        return f"{message}（提示：{hint}）"
+    return message
+
+
 class MonkeyCodeClient:
     """MonkeyCode 云平台客户端。
 
@@ -406,6 +427,70 @@ class MonkeyCodeClient:
         if isinstance(data, dict):
             return data.get("projects") or []
         return data or []
+
+    # ---------- 分页 helper ----------
+
+    def paginate(
+        self,
+        fetcher,
+        extract=None,
+        page_size: int = 20,
+        max_pages: int = 100,
+    ):
+        """通用分页迭代器。
+
+        fetcher(page, size) 返回一页原始数据；
+        extract(raw) 提取当前页条目列表（默认 raw 本身是列表）。
+        当某页条目数小于 page_size 时结束。
+        """
+        extract = extract or (lambda raw: raw if isinstance(raw, list) else [])
+        for page in range(1, max_pages + 1):
+            raw = fetcher(page, page_size)
+            items = extract(raw) or []
+            for item in items:
+                yield item
+            if len(items) < page_size:
+                break
+
+    def iter_tasks(
+        self,
+        page_size: int = 20,
+        max_pages: int = 100,
+        **filters: Any,
+    ):
+        """分页迭代任务列表。
+
+        额外筛选参数透传给 list_tasks（status/project_id 等）。
+        """
+        return self.paginate(
+            lambda page, size: self.list_tasks(
+                page=page, size=size, **filters
+            ),
+            extract=lambda raw: raw.get("tasks")
+            if isinstance(raw, dict)
+            else (raw or []),
+            page_size=page_size,
+            max_pages=max_pages,
+        )
+
+    def iter_projects(
+        self,
+        page_size: int = 20,
+        max_pages: int = 100,
+        **filters: Any,
+    ):
+        """分页迭代项目列表。
+
+        额外筛选参数透传给 list_projects。
+        """
+        return self.paginate(
+            lambda page, size: self.list_projects(
+                limit=size, **filters
+            ),
+            extract=lambda raw: raw if isinstance(raw, list) else (raw or []),
+            page_size=page_size,
+            max_pages=max_pages,
+        )
 
     def create_project(
         self,
@@ -1938,12 +2023,26 @@ class MonkeyCodeClient:
         auth_required: bool = True,
         files: dict[str, Any] | None = None,
         _retry: bool = True,
+        _attempt: int = 0,
     ) -> Any:
         try:
             resp = self._client.request(
                 method, path, json=json, params=params, files=files
             )
         except httpx.HTTPError as exc:
+            # 网络抖动：只读请求自动重试（指数退避）
+            if method.upper() in _RETRYABLE_METHODS and _attempt < _MAX_RETRIES:
+                time.sleep(_RETRY_BASE_DELAY * (2 ** _attempt))
+                return self._request(
+                    method,
+                    path,
+                    json=json,
+                    params=params,
+                    auth_required=auth_required,
+                    files=files,
+                    _retry=_retry,
+                    _attempt=_attempt + 1,
+                )
             raise APIError(f"请求失败：{exc}") from exc
 
         if resp.status_code == 401:
@@ -1975,6 +2074,23 @@ class MonkeyCodeClient:
                     )
             raise AuthenticationError("未认证或会话已失效，请重新登录。", code=401)
         if resp.status_code == 429:
+            # 限流：只读请求按 Retry-After / 指数退避等待后重试
+            if method.upper() in _RETRYABLE_METHODS and _attempt < _MAX_RETRIES:
+                retry_after = resp.headers.get("Retry-After")
+                delay = _RETRY_BASE_DELAY * (2 ** _attempt)
+                if retry_after and retry_after.isdigit():
+                    delay = max(int(retry_after), 1)
+                time.sleep(delay)
+                return self._request(
+                    method,
+                    path,
+                    json=json,
+                    params=params,
+                    auth_required=auth_required,
+                    files=files,
+                    _retry=_retry,
+                    _attempt=_attempt + 1,
+                )
             raise RateLimitError("触发限流（HTTP 429），请稍后重试。", code=429)
         if resp.status_code == 403 and auth_required:
             raise AuthenticationError("无权限访问该资源。", code=403)
@@ -1990,6 +2106,7 @@ class MonkeyCodeClient:
             code = body.get("code")
             if code != 0:
                 message = body.get("message") or body.get("msg") or "未知错误"
+                message = _friendly_error(code, message)
                 raise APIError(f"{message}（code={code}）", code=code, raw=body)
             return body.get("data")
         return body

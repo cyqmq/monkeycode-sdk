@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import sys
@@ -108,6 +109,125 @@ def cmd_logout(client: MonkeyCodeClient) -> None:
     print("已退出登录")
 
 
+def cmd_list_tasks(client: MonkeyCodeClient) -> None:
+    """列出最近任务。"""
+    data = client.list_tasks(size=10)
+    tasks = data.get("tasks") if isinstance(data, dict) else data
+    for t in tasks or []:
+        status = t.get("status") or ""
+        tid = t.get("id") or ""
+        content = (t.get("content") or "")[:60]
+        print(f"{tid}  {status:<12}  {content}")
+
+
+def cmd_task_info(client: MonkeyCodeClient, task_id: str) -> None:
+    """查看任务详情。"""
+    print_json(client.get_task(task_id).raw)
+
+
+def cmd_task_stop(client: MonkeyCodeClient, task_id: str) -> None:
+    """停止任务。"""
+    print_json(client.stop_task(task_id))
+
+
+def cmd_task_delete(client: MonkeyCodeClient, task_id: str) -> None:
+    """删除任务。"""
+    print_json(client.delete_task(task_id))
+
+
+def cmd_send_msg(client: MonkeyCodeClient, task_id: str, content: str) -> None:
+    """向运行中的任务发送消息。"""
+    events = asyncio.run(client.send_task_message(task_id, content))
+    for e in events:
+        text = str(e.data)
+        print(f"{e.type}: {text[:200]}")
+
+
+def cmd_wallet(client: MonkeyCodeClient) -> None:
+    """查看钱包余额。"""
+    print_json(client.get_wallet())
+
+
+def cmd_checkin(client: MonkeyCodeClient) -> None:
+    """每日签到（自动求解 PoW）。"""
+    print_json(client.checkin())
+
+
+def cmd_wallet_tx(client: MonkeyCodeClient) -> None:
+    """查看钱包交易记录。"""
+    print_json(client.get_wallet_transactions())
+
+
+def cmd_list_projects(client: MonkeyCodeClient) -> None:
+    """列出项目（仓库）。"""
+    print_json(client.list_projects())
+
+
+def cmd_options(client: MonkeyCodeClient) -> None:
+    """显示创建任务的下拉选项统计。"""
+    opts = client.get_task_options()
+    print(
+        f"models={len(opts['models'])} images={len(opts['images'])} "
+        f"hosts={len(opts['hosts'])} projects={len(opts['projects'])} "
+        f"plan={opts['plan']}"
+    )
+
+
+def cmd_vms(client: MonkeyCodeClient) -> None:
+    """列出各宿主下的虚拟机。"""
+    hosts = client.list_hosts()
+    for h in hosts or []:
+        vms = h.get("virtualmachines") or h.get("vms") or []
+        print(f"host={h.get('id')} name={h.get('name')} vms={len(vms)}")
+        for vm in vms:
+            print(
+                f"  vm={vm.get('id')}  {vm.get('name') or ''}  "
+                f"{vm.get('status') or ''}"
+            )
+
+
+def cmd_terminal(client: MonkeyCodeClient, vm_id: str) -> None:
+    """列出虚拟机终端会话。"""
+    print_json(client.list_terminal_sessions(vm_id))
+
+
+def cmd_api_key_create(client: MonkeyCodeClient) -> None:
+    """创建 API Key（仅显示一次）。"""
+    key = client.create_api_key()
+    print(f"key_id={key.key_id}")
+    print(f"api_key={key.api_key}")
+    print("（api_key 仅此一次显示，请妥善保存）")
+
+
+def cmd_api_key_delete(client: MonkeyCodeClient, key_id: str) -> None:
+    """删除 API Key。"""
+    print_json(client.delete_api_key(key_id))
+
+
+def cmd_list_available_models(client: MonkeyCodeClient) -> None:
+    """列出可用模型。"""
+    print_json(client.list_available_models())
+
+
+def cmd_list_model_providers(client: MonkeyCodeClient) -> None:
+    """列出模型供应商。"""
+    print_json(client.list_model_providers())
+
+
+def cmd_switch_model(
+    client: MonkeyCodeClient, task_id: str, model_id: str
+) -> None:
+    """切换运行中任务的模型。"""
+    result = asyncio.run(client.switch_task_model(task_id, model_id))
+    print_json(result)
+
+
+def cmd_restart(client: MonkeyCodeClient, task_id: str) -> None:
+    """重启任务。"""
+    result = asyncio.run(client.restart_task(task_id))
+    print_json(result)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="MonkeyCode SDK CLI")
     parser.add_argument(
@@ -128,12 +248,50 @@ def main() -> None:
     sub.add_parser("list-hosts", help="列出云端环境")
     sub.add_parser("list-images", help="列出镜像")
     sub.add_parser("list-models", help="列出模型")
+    sub.add_parser("list-available-models", help="列出可用模型")
+    sub.add_parser("list-model-providers", help="列出模型供应商")
+    sub.add_parser("list-tasks", help="列出最近任务")
+    sub.add_parser("wallet", help="查看钱包余额")
+    sub.add_parser("checkin", help="每日签到")
+    sub.add_parser("wallet-tx", help="查看钱包交易记录")
+    sub.add_parser("list-projects", help="列出项目（仓库）")
+    sub.add_parser("options", help="显示创建任务的下拉选项统计")
+    sub.add_parser("vms", help="列出各宿主下的虚拟机")
+
+    api_key_p = sub.add_parser("api-key", help="API Key 管理")
+    api_key_sub = api_key_p.add_subparsers(dest="api_key_command", required=True)
+    api_key_sub.add_parser("create", help="创建 API Key")
+    ak_delete_p = api_key_sub.add_parser("delete", help="删除 API Key")
+    ak_delete_p.add_argument("key_id", help="API Key ID")
 
     run_p = sub.add_parser("run", help="创建任务并轮询结果")
     run_p.add_argument("content", help="任务内容（自然语言）")
 
     links_p = sub.add_parser("links", help="列出任务中的预览链接并检测存活")
     links_p.add_argument("task_id", help="任务 ID")
+
+    info_p = sub.add_parser("task-info", help="查看任务详情")
+    info_p.add_argument("task_id", help="任务 ID")
+
+    stop_p = sub.add_parser("task-stop", help="停止任务")
+    stop_p.add_argument("task_id", help="任务 ID")
+
+    delete_p = sub.add_parser("task-delete", help="删除任务")
+    delete_p.add_argument("task_id", help="任务 ID")
+
+    send_p = sub.add_parser("send-msg", help="向运行中的任务发送消息")
+    send_p.add_argument("task_id", help="任务 ID")
+    send_p.add_argument("content", help="消息内容")
+
+    term_p = sub.add_parser("terminal", help="列出虚拟机终端会话")
+    term_p.add_argument("vm_id", help="虚拟机 ID")
+
+    sm_p = sub.add_parser("switch-model", help="切换运行中任务的模型")
+    sm_p.add_argument("task_id", help="任务 ID")
+    sm_p.add_argument("model_id", help="模型 ID")
+
+    restart_p = sub.add_parser("restart", help="重启任务")
+    restart_p.add_argument("task_id", help="任务 ID")
 
     args = parser.parse_args()
     email, password = get_credentials()
@@ -161,6 +319,43 @@ def main() -> None:
             print_json(client.list_images())
         elif args.command == "list-models":
             print_json(client.list_models())
+        elif args.command == "list-available-models":
+            cmd_list_available_models(client)
+        elif args.command == "list-model-providers":
+            cmd_list_model_providers(client)
+        elif args.command == "list-tasks":
+            cmd_list_tasks(client)
+        elif args.command == "wallet":
+            cmd_wallet(client)
+        elif args.command == "checkin":
+            cmd_checkin(client)
+        elif args.command == "wallet-tx":
+            cmd_wallet_tx(client)
+        elif args.command == "list-projects":
+            cmd_list_projects(client)
+        elif args.command == "options":
+            cmd_options(client)
+        elif args.command == "vms":
+            cmd_vms(client)
+        elif args.command == "api-key":
+            if args.api_key_command == "create":
+                cmd_api_key_create(client)
+            else:
+                cmd_api_key_delete(client, args.key_id)
+        elif args.command == "task-info":
+            cmd_task_info(client, args.task_id)
+        elif args.command == "task-stop":
+            cmd_task_stop(client, args.task_id)
+        elif args.command == "task-delete":
+            cmd_task_delete(client, args.task_id)
+        elif args.command == "send-msg":
+            cmd_send_msg(client, args.task_id, args.content)
+        elif args.command == "terminal":
+            cmd_terminal(client, args.vm_id)
+        elif args.command == "switch-model":
+            cmd_switch_model(client, args.task_id, args.model_id)
+        elif args.command == "restart":
+            cmd_restart(client, args.task_id)
         elif args.command == "run":
             cmd_run(client, args.content)
         elif args.command == "links":
