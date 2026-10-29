@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "monkeycode-sdk"
+version = "0.1.0"
+description = "MonkeyCode 云平台 REST API 的 Python SDK（认证、任务提交、结果轮询）"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "cyqmq" }]
+keywords = ["monkeycode", "ai", "coding", "agent", "sdk"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+cli = []
+
+[project.urls]
+Homepage = "https://github.com/cyqmq/monkeycode-sdk"
+Repository = "https://github.com/cyqmq/monkeycode-sdk"
+
+[tool.setuptools.packages.find]
+include = ["monkeycode*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "monkeycode.__version__" }
