@@ -1,5 +1,11 @@
 # 更新日志
 
+## [1.6.2] - 2026-10-29
+
+### 修复
+- `docs/API.md` 方法索引遗漏 9 个 async WebSocket/控制通道方法（send_task_message / switch_task_model / restart_task / switch_task_agent_resources / list_task_repo_files / read_task_repo_file / get_task_repo_diff / get_task_repo_changes / sync_client_ip），文档从 196 修正为 **205**
+- 新增 `scripts/gen_api_doc.py` 文档生成脚本（同步 + 异步方法全覆盖），后续可一键重新生成
+
 ## [1.6.1] - 2026-10-29
 
 ### 修复

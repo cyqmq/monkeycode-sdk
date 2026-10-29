@@ -1,6 +1,6 @@
 # API 方法索引
 
-按字母序排列的 MonkeyCodeClient 全部公开方法（共 196 个）。
+按字母序排列的 MonkeyCodeClient 全部公开方法（共 205 个，含 async WebSocket/控制通道方法）。
 详细示例见 [功能参考.md](功能参考.md)。
 
 | 方法签名 | 说明 |
@@ -65,6 +65,8 @@
 | `get_subscription(self)` | 查询会员订阅信息 |
 | `get_task(self, task_id: str)` | 获取任务详情 |
 | `get_task_options(self)` | 聚合创建任务所需的下拉选项，一次返回 |
+| `get_task_repo_changes(self, task_id: str, timeout: float=30.0)` | 获取任务仓库变更列表（kind=repo_file_changes） |
+| `get_task_repo_diff(self, task_id: str, path: str, timeout: float=30.0)` | 获取任务仓库文件 diff（kind=repo_file_diff） |
 | `get_task_rounds(self, task_id: str, cursor: str | None=None, limit: int=2, direction: str='backward', inclusive: bool | None=None)` | 查询任务历史轮次 |
 | `get_task_user_inputs(self, task_id: str, cursor: str | None=None, limit: int=20)` | 查询任务用户输入列表 |
 | `get_user_status(self)` | 获取当前登录用户身份/状态（whoami 底层接口） |
@@ -99,6 +101,7 @@
 | `list_projects(self, cursor: str | None=None, limit: int | None=None)` | 获取项目（仓库）列表，支持分页 |
 | `list_skills(self)` | 获取可用技能列表（配合 create_task 的 skill_ids） |
 | `list_task_links(self, task_id: str, check_alive: bool=True, max_pages: int=500)` | 列出任务中 AI 拉起的预览链接，并检测存活状态 |
+| `list_task_repo_files(self, task_id: str, path: str='', glob_pattern: str='*', include_hidden: bool=True, timeout: float=30.0)` | 列出任务仓库文件（kind=repo_file_list） |
 | `list_tasks(self, page: int | None=None, size: int | None=None, status: str | None=None, project_id: str | None=None, quick_start: str | None=None, next_token: str | None=None)` | 任务列表 |
 | `list_terminal_sessions(self, vm_id: str)` | 获取虚拟机终端会话列表 |
 | `login(self, captcha_token: str | None=None)` | 使用邮箱 + 密码登录，自动处理 PoW 验证码 |
@@ -110,9 +113,12 @@
 | `open_terminal(self, vm_id: str, terminal_id: str | None=None, col: int=80, row: int=24)` | 打开虚拟机终端流（WebSocket 上下文管理器） |
 | `paginate(self, fetcher, extract=None, page_size: int=20, max_pages: int=100)` | 通用分页迭代器 |
 | `presign_upload(self, filename: str)` | 获取附件预签名上传信息 |
+| `read_task_repo_file(self, task_id: str, path: str, offset: int=0, length: int=1024 * 1024, timeout: float=30.0)` | 读取任务仓库文件（kind=repo_read_file，默认前 1MB） |
 | `redeem_captcha(self, token: str, solutions: list[int])` | 提交验证码答案，兑换登录用的 captcha_token |
 | `request_password_reset(self, email: str)` | 发送密码重置邮件 |
 | `reset_password(self, token: str, new_password: str)` | 重置密码 |
+| `restart_task(self, task_id: str, load_session: bool=True, timeout: float=30.0)` | 重启任务，可选加载历史会话（kind=restart） |
+| `send_task_message(self, task_id: str, content: str, attachments: list[dict] | None=None, read_timeout: float=30.0)` | 进入任务会话，发送用户消息，返回直到 task-started 的首批事件 |
 | `set_auto_renew(self, enabled: bool)` | 设置订阅自动续费 |
 | `set_credit_consumption(self, enabled: bool)` | 设置订阅积分消费 |
 | `set_mcp_tool(self, tool_id: str, enabled: bool)` | 启用/关闭 MCP 工具 |
@@ -120,6 +126,9 @@
 | `share_terminal(self, vm_id: str, mode: str='read_write', terminal_id: str | None=None)` | 分享终端，返回 {password} |
 | `speech_to_text(self, **fields: Any)` | 语音转文字（提交音频） |
 | `stop_task(self, task_id: str)` | 停止任务 |
+| `switch_task_agent_resources(self, task_id: str, skill_ids: list[str] | None=None, plugin_ids: list[str] | None=None, timeout: float=30.0)` | 运行中全量更新任务的技能/插件列表（kind=switch_agent_resources） |
+| `switch_task_model(self, task_id: str, model_id: str, load_session: bool=True, timeout: float=30.0)` | 切换运行中任务的模型（走 control 通道） |
+| `sync_client_ip(self, task_id: str, ip: str, timeout: float=30.0)` | 上报客户端 IP（控制通道上行消息 sync-my-ip，Web 前端用） |
 | `sync_mcp_upstream(self, upstream_id: str)` | 同步 MCP 上游 |
 | `team_add_user(self, **fields: Any)` | 添加团队成员 |
 | `team_add_user_with_password(self, **fields: Any)` | 创建团队成员并返回初始密码（仅响应返回一次） |
