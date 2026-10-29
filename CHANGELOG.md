@@ -1,5 +1,15 @@
 # 更新日志
 
+## [0.1.10] - 2026-10-25
+
+### 新增
+- `create_task` 支持 **attachments 附件**（最多 10 个 `{url, filename}`）
+- **附件上传**：`presign_upload(filename)` 获取预签名信息，`upload_attachment()` 上传并返回 access_url
+- **任务删除**：`delete_task(task_id)`
+- **插件/技能列表**：`list_plugins()` / `list_skills()`
+- **钱包交易记录**：`get_wallet_transactions()`
+- **Git 分支列表**：`list_git_branches(identity_id, repo_full_name)`（自动 URL 编码）
+
 ## [0.1.9] - 2026-10-25
 
 ### 新增

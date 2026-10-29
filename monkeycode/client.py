@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import time
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -312,11 +313,25 @@ class MonkeyCodeClient:
             "GET", f"/api/v1/users/projects/{project_id}/issues", params=params
         )
 
+    # ---------- 插件 / 技能 ----------
+
+    def list_plugins(self) -> Any:
+        """获取可用插件列表。"""
+        return self._request("GET", "/api/v1/plugins")
+
+    def list_skills(self) -> Any:
+        """获取可用技能列表（配合 create_task 的 skill_ids）。"""
+        return self._request("GET", "/api/v1/skills")
+
     # ---------- 钱包 / 签到 ----------
 
     def get_wallet(self) -> Any:
         """查询钱包（积分余额）。"""
         return self._request("GET", "/api/v1/users/wallet")
+
+    def get_wallet_transactions(self) -> Any:
+        """查询钱包交易记录。"""
+        return self._request("GET", "/api/v1/users/wallet/transaction")
 
     def checkin(self) -> Any:
         """每日签到（自动求解 PoW 验证码）。"""
@@ -334,6 +349,25 @@ class MonkeyCodeClient:
     def list_git_identities(self) -> Any:
         """获取 Git 身份列表。"""
         return self._request("GET", "/api/v1/users/git-identities")
+
+    def list_git_branches(
+        self,
+        identity_id: str,
+        repo_full_name: str,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> Any:
+        """获取指定仓库的分支列表。
+
+        repo_full_name 形如 "owner/repo"，会自动做 URL 编码。
+        """
+        escaped = quote(repo_full_name, safe="")
+        params: dict[str, Any] = {"page": page, "per_page": per_page}
+        return self._request(
+            "GET",
+            f"/api/v1/users/git-identities/{identity_id}/{escaped}/branches",
+            params=params,
+        )
 
     def add_git_identity(
         self,
@@ -438,6 +472,48 @@ class MonkeyCodeClient:
             raise APIError(f"下载失败（HTTP {resp.status_code}）：{resp.text[:200]}")
         return resp.content
 
+    # ---------- 附件上传（任务/消息附件） ----------
+
+    def presign_upload(self, filename: str) -> dict[str, Any]:
+        """获取附件预签名上传信息。
+
+        返回 data 通常包含 upload_url / access_url 等字段。
+        """
+        return self._request(
+            "POST",
+            "/api/v1/uploader/presign",
+            json={"filename": filename},
+        )
+
+    def upload_attachment(
+        self,
+        filename: str,
+        file_path: str | None = None,
+        file_bytes: bytes | None = None,
+    ) -> dict[str, Any]:
+        """上传附件并返回 access_url。
+
+        流程：presign 获取 upload_url/access_url -> 用 PUT 上传文件内容。
+        上传成功后可用返回的 access_url 作为任务/消息的附件 url。
+        """
+        if file_path is None and file_bytes is None:
+            raise ValueError("请提供 file_path 或 file_bytes。")
+        presigned = self.presign_upload(filename)
+        upload_url = presigned.get("upload_url")
+        if not upload_url:
+            raise APIError(f"presign 响应缺少 upload_url：{presigned}")
+        if file_path is not None:
+            with open(file_path, "rb") as f:
+                content = f.read()
+        else:
+            content = file_bytes
+        resp = self._client.put(upload_url, content=content)
+        if resp.status_code not in (200, 201, 204):
+            raise APIError(
+                f"附件上传失败（HTTP {resp.status_code}）：{resp.text[:200]}"
+            )
+        return presigned
+
     # ---------- 任务 ----------
 
     def create_task(
@@ -457,12 +533,14 @@ class MonkeyCodeClient:
         plugin_ids: list[str] | None = None,
         project_id: str | None = None,
         issue_id: str | None = None,
+        attachments: list[dict] | None = None,
     ) -> Task:
         """创建任务。
 
         必填：content。repo 可空（不绑定 Git 仓库也能创建任务）；
         host_id 默认 public_host；image_id / model_id 留空时自动取列表第一个可用项；
         资源默认 2 核 / 8GB / 3 小时（桌面端默认档位）。
+        attachments：附件列表（最多 10 个），每项 {url, filename}。
         """
         repo = repo or RepoReq(repo_url="")
         if not image_id:
@@ -493,6 +571,8 @@ class MonkeyCodeClient:
             body["git_identity_id"] = git_identity_id
         if system_prompt:
             body["system_prompt"] = system_prompt
+        if attachments:
+            body["attachments"] = attachments[:10]
         extra = TaskExtraConfig(
             skill_ids=skill_ids,
             plugin_ids=plugin_ids,
@@ -573,6 +653,10 @@ class MonkeyCodeClient:
     def stop_task(self, task_id: str) -> dict[str, Any]:
         """停止任务。"""
         return self._request("PUT", "/api/v1/users/tasks/stop", json={"id": task_id})
+
+    def delete_task(self, task_id: str) -> Any:
+        """删除任务。"""
+        return self._request("DELETE", f"/api/v1/users/tasks/{task_id}")
 
     def wait_task(
         self,

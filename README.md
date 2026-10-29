@@ -110,6 +110,16 @@ data = client.download_file(vm_id, "/root", "a.txt")
 
 # 预览链接
 links = client.list_task_links(task_id)  # [{url, count, status, http_code}]
+
+# 附件
+client.create_task(content="...", attachments=[{"url": access_url, "filename": "a.txt"}])
+info = client.presign_upload("a.txt")           # 预签名
+client.upload_attachment("a.txt", file_bytes=b"...")  # 上传并返回 access_url
+client.delete_task(task_id)
+client.list_plugins()
+client.list_skills()
+client.get_wallet_transactions()
+client.list_git_branches(identity_id, "owner/repo")
 ```
 
 ## 命令行验证
