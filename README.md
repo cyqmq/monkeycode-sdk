@@ -79,6 +79,12 @@ python cli.py run "写一个 hello world"
   3. `POST /api/v1/public/captcha/redeem` 提交 solutions，得到 `captcha_token`
   4. 携带 `captcha_token` 登录
   实现见 `monkeycode/pow.py`。
+- **团队管理员登录**：`client.team_login(email, password)` 走
+  `POST /api/v1/teams/users/login`，成功后保存团队会话 Cookie
+  `monkeycode_ai_team_session`；PoW 验证码同样自动求解。
+- **自托管支持**：构造客户端时传 `base_url` 指向自托管地址即可。
+  可用 `client.get_server_config()` 读取 `captcha_enabled` 等公开配置；
+  若自托管关闭了验证码，`login()` 会直接成功（无需 PoW）。
 - 列表接口返回嵌套结构，SDK 已自动提取：
   - `list_hosts()` → `data["hosts"]`
   - `list_images()` → `data["images"]`
@@ -88,7 +94,9 @@ python cli.py run "写一个 hello world"
 ## 安全提示
 
 - 不要在公共仓库/聊天中泄露你的密码。
-- 建议登录一次后创建 **API Key**（`POST /api/v1/users/ohmyagent/api-keys`），后续用 Key 认证（SDK 的 API Key 支持将在后续版本加入）。
+- **OhMyAgent API Key 不是 REST 会话凭证**：`create_api_key() / delete_api_key()`
+  已支持管理该 Key，但它用于 OhMyAgent 代理（走 `X-OhMyAgent-Signature` 签名，
+  LLM 请求的 `model` 字段传模型配置 ID），不能替代 Cookie 调用 `/api/v1` 主 API。
 - SDK 不落盘任何凭证。
 
 ## 已知问题（平台侧）

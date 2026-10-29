@@ -1,5 +1,14 @@
 # 更新日志
 
+## [0.1.4] - 2026-10-25
+
+### 新增
+- **团队管理员登录**：`team_login(email, password)` 走 `POST /api/v1/teams/users/login`，自动 PoW 求解，保存团队会话 Cookie `monkeycode_ai_team_session`
+- **自托管支持**：新增 `get_server_config()` 读取公开配置（含 `captcha_enabled`）；自托管部署只需改 `base_url`，验证码关闭时自动直接登录
+
+### 文档
+- README 说明 OhMyAgent API Key 的真实用途：不是 REST 会话凭证，而是 OhMyAgent 代理 Key（`X-OhMyAgent-Signature` 签名）
+
 ## [0.1.3] - 2026-10-25
 
 ### 新增

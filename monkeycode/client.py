@@ -150,6 +150,61 @@ class MonkeyCodeClient:
             raw=data,
         )
 
+    # ---------- 服务器配置 / 团队登录 ----------
+
+    def get_server_config(self) -> dict[str, Any]:
+        """获取服务器公开配置（无需登录）。
+
+        返回 data 通常包含 edition / region / captcha_enabled 等字段，
+        自托管部署可通过该接口确认是否启用验证码。
+        """
+        return self._request("GET", "/api/v1/server/config", auth_required=False)
+
+    def team_login(
+        self,
+        email: str | None = None,
+        password: str | None = None,
+        captcha_token: str | None = None,
+    ) -> dict[str, Any]:
+        """团队管理员登录。
+
+        使用 POST /api/v1/teams/users/login，成功后保存团队会话 Cookie
+        monkeycode_ai_team_session。邮箱/密码缺省时使用构造客户端时的凭证。
+        与个人登录一样，云平台强制 PoW 验证码时自动求解。
+        """
+        mail = email or self.email
+        pwd = password or self._password
+        if not mail or not pwd:
+            raise AuthenticationError("缺少邮箱或密码，请在构造客户端时传入。")
+        try:
+            return self._team_login_request(mail, pwd, captcha_token)
+        except CaptchaRequiredError:
+            if captcha_token:
+                raise
+            token = self._solve_captcha()
+            return self._team_login_request(mail, pwd, token)
+
+    def _team_login_request(
+        self, email: str, password: str, captcha_token: str | None
+    ) -> dict[str, Any]:
+        """发送团队登录请求。"""
+        pwd = _md5(password) if self._password_md5_mode else password
+        body: dict[str, Any] = {
+            "email": email,
+            "password": pwd,
+        }
+        if captcha_token:
+            body["captcha_token"] = captcha_token
+        try:
+            return self._request("POST", "/api/v1/teams/users/login", json=body)
+        except AuthenticationError as exc:
+            if exc.code == 403 and not captcha_token:
+                raise CaptchaRequiredError(
+                    "团队登录需要验证码。",
+                    code=403,
+                ) from exc
+            raise
+
     # ---------- 枚举环境 ----------
 
     def list_hosts(self) -> list[dict[str, Any]]:
