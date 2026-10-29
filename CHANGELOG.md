@@ -1,5 +1,27 @@
 # 更新日志
 
+## [1.0.0] - 2026-10-25
+
+### 新增（完整覆盖 MonkeyCode REST API）
+- **镜像 CRUD**：`create_image` / `update_image` / `delete_image`
+- **订阅管理**：`create_subscription` / `set_auto_renew` / `set_credit_consumption`
+- **邀请列表**：`list_invitations`
+- **MCP 管理**：`list/create/update/delete_mcp_upstream`、`sync_mcp_upstream`、`set_mcp_tool`
+- **通知渠道**：`list/create/update/delete/test_notify_channel`、`list_notify_event_types`
+- **账号/密码**：`update_user_profile` / `delete_account` / `change_password` / `request_password_reset` / `reset_password`
+- **Git Bots 补全**：`update_git_bot` / `delete_git_bot` / `share_git_bot`
+- **成员/统计**：`list_members` / `get_public_stats`
+- **邮箱/微信绑定**：`bind_email_request` / `bind_wechat_qrcode` / `unbind_wechat`
+- **社区**：`list_playground_posts` / `create_playground_post` / `create_playground_task_post`
+- **License**：`get_license_status` / `get_license_machine_code` / `import_license`
+- **Git 平台授权 URL**：`get_cnb/gitea/gitee/gitlab_authorize_url`、`get_gitea_sites`、`get_gitlab_sites`
+- **OAuth/OIDC URL**：`build_oauth_login_url` / `build_oidc_login_url`
+- **语音转文字**：`speech_to_text`
+- **团队管理控制面**：`team_*` 系列（分组/用户/宿主/镜像/模型/技能/项目/任务/OIDC/MCP/通知/OAuth 站点/扩展包/VM 策略/审计/Dashboard/初始化）
+
+### 里程碑
+- SDK 升级到 **1.0.0**：核心功能 + 管理/扩展功能完整覆盖 MonkeyCode REST API，进入稳定阶段
+
 ## [0.1.11] - 2026-10-25
 
 ### 新增

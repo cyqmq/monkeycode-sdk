@@ -638,6 +638,339 @@ class MonkeyCodeClient:
             )
         return presigned
 
+
+    # ---------- 扩展 / 管理功能（覆盖完整 API，按需使用） ----------
+
+    def create_image(self, image_name: str, is_default: bool | None = None, remark: str | None = None) -> Any:
+        """创建镜像。"""
+        body: dict[str, Any] = {"image_name": image_name}
+        if is_default is not None:
+            body["is_default"] = is_default
+        if remark:
+            body["remark"] = remark
+        return self._request("POST", "/api/v1/users/images", json=body)
+
+    def update_image(self, image_id: str, image_name: str | None = None, is_default: bool | None = None, remark: str | None = None) -> Any:
+        """更新镜像。"""
+        body: dict[str, Any] = {}
+        if image_name is not None:
+            body["image_name"] = image_name
+        if is_default is not None:
+            body["is_default"] = is_default
+        if remark:
+            body["remark"] = remark
+        return self._request("PUT", f"/api/v1/users/images/{image_id}", json=body)
+
+    def delete_image(self, image_id: str) -> Any:
+        """删除镜像。"""
+        return self._request("DELETE", f"/api/v1/users/images/{image_id}")
+
+    def create_subscription(self) -> Any:
+        """开通会员订阅。"""
+        return self._request("POST", "/api/v1/users/subscription", json={})
+
+    def set_auto_renew(self, enabled: bool) -> Any:
+        """设置订阅自动续费。"""
+        return self._request("PUT", "/api/v1/users/subscription/auto-renew", json={"enabled": enabled})
+
+    def set_credit_consumption(self, enabled: bool) -> Any:
+        """设置订阅积分消费。"""
+        return self._request("PUT", "/api/v1/users/subscription/credit-consumption", json={"enabled": enabled})
+
+    def list_invitations(self) -> Any:
+        """获取邀请列表。"""
+        return self._request("GET", "/api/v1/users/invitations")
+
+    def list_mcp_upstreams(self) -> Any:
+        """获取 MCP 上游列表。"""
+        return self._request("GET", "/api/v1/users/mcp/upstreams")
+
+    def create_mcp_upstream(self, name: str, url: str, headers: dict[str, Any] | None = None) -> Any:
+        """创建 MCP 上游。"""
+        body: dict[str, Any] = {"name": name, "url": url}
+        if headers:
+            body["headers"] = headers
+        return self._request("POST", "/api/v1/users/mcp/upstreams", json=body)
+
+    def update_mcp_upstream(self, upstream_id: str, **fields: Any) -> Any:
+        """更新 MCP 上游。"""
+        return self._request("PUT", f"/api/v1/users/mcp/upstreams/{upstream_id}", json=fields)
+
+    def delete_mcp_upstream(self, upstream_id: str) -> Any:
+        """删除 MCP 上游。"""
+        return self._request("DELETE", f"/api/v1/users/mcp/upstreams/{upstream_id}")
+
+    def sync_mcp_upstream(self, upstream_id: str) -> Any:
+        """同步 MCP 上游。"""
+        return self._request("POST", f"/api/v1/users/mcp/upstreams/{upstream_id}/sync", json={})
+
+    def set_mcp_tool(self, tool_id: str, enabled: bool) -> Any:
+        """启用/关闭 MCP 工具。"""
+        return self._request("PUT", f"/api/v1/users/mcp/tools/{tool_id}", json={"enabled": enabled})
+
+    def list_notify_channels(self) -> Any:
+        """获取通知渠道列表。"""
+        return self._request("GET", "/api/v1/users/notify/channels")
+
+    def create_notify_channel(self, name: str, kind: str, webhook_url: str, event_types: list[str], headers: dict[str, Any] | None = None) -> Any:
+        """创建通知渠道。"""
+        body: dict[str, Any] = {
+            "name": name, "kind": kind, "webhook_url": webhook_url, "event_types": event_types,
+        }
+        if headers:
+            body["headers"] = headers
+        return self._request("POST", "/api/v1/users/notify/channels", json=body)
+
+    def update_notify_channel(self, channel_id: str, **fields: Any) -> Any:
+        """更新通知渠道。"""
+        return self._request("PUT", f"/api/v1/users/notify/channels/{channel_id}", json=fields)
+
+    def delete_notify_channel(self, channel_id: str) -> Any:
+        """删除通知渠道。"""
+        return self._request("DELETE", f"/api/v1/users/notify/channels/{channel_id}")
+
+    def test_notify_channel(self, channel_id: str) -> Any:
+        """测试通知渠道。"""
+        return self._request("POST", f"/api/v1/users/notify/channels/{channel_id}/test", json={})
+
+    def list_notify_event_types(self) -> Any:
+        """获取通知事件类型。"""
+        return self._request("GET", "/api/v1/users/notify/event-types")
+
+    def update_user_profile(self, name: str | None = None, avatar_url: str | None = None) -> Any:
+        """更新用户昵称/头像。"""
+        body: dict[str, Any] = {}
+        if name is not None:
+            body["name"] = name
+        if avatar_url is not None:
+            body["avatar_url"] = avatar_url
+        return self._request("PUT", "/api/v1/users", json=body)
+
+    def delete_account(self) -> Any:
+        """注销账号。"""
+        return self._request("DELETE", "/api/v1/users/account")
+
+    def change_password(self, new_password: str, current_password: str | None = None) -> Any:
+        """修改密码。"""
+        body: dict[str, Any] = {"new_password": new_password}
+        if current_password:
+            body["current_password"] = current_password
+        return self._request("PUT", "/api/v1/users/passwords/change", json=body)
+
+    def request_password_reset(self, email: str) -> Any:
+        """发送密码重置邮件。"""
+        return self._request("PUT", "/api/v1/users/passwords/reset-request", json={"email": email})
+
+    def reset_password(self, token: str, new_password: str) -> Any:
+        """重置密码。"""
+        return self._request("PUT", "/api/v1/users/passwords/reset", json={"token": token, "new_password": new_password})
+
+    def update_git_bot(self, **fields: Any) -> Any:
+        """更新 Git Bot。"""
+        return self._request("PUT", "/api/v1/users/git-bots", json=fields)
+
+    def delete_git_bot(self, git_bot_id: str) -> Any:
+        """删除 Git Bot。"""
+        return self._request("DELETE", f"/api/v1/users/git-bots/{git_bot_id}")
+
+    def share_git_bot(self, git_bot_id: str, user_ids: list[str]) -> Any:
+        """分享 Git Bot。"""
+        return self._request("POST", "/api/v1/users/git-bots/share", json={"id": git_bot_id, "user_ids": user_ids})
+
+    def list_members(self) -> Any:
+        """获取团队成员列表。"""
+        return self._request("GET", "/api/v1/users/members")
+
+    def get_public_stats(self) -> Any:
+        """获取公开统计。"""
+        return self._request("GET", "/api/v1/public/stats")
+
+    def bind_email_request(self, email: str) -> Any:
+        """请求绑定邮箱。"""
+        return self._request("PUT", "/api/v1/users/email/bind-request", json={"email": email})
+
+    def bind_wechat_qrcode(self) -> Any:
+        """创建微信公众号绑定二维码。"""
+        return self._request("POST", "/api/v1/users/wechat-mp/bind-qrcode", json={})
+
+    def unbind_wechat(self) -> Any:
+        """解绑微信公众号。"""
+        return self._request("DELETE", "/api/v1/users/wechat-mp/bind")
+
+    def list_playground_posts(self) -> Any:
+        """获取社区帖子列表。"""
+        return self._request("GET", "/api/v1/playground-posts")
+
+    def create_playground_post(self, content: str) -> Any:
+        """发布普通社区帖子。"""
+        return self._request("POST", "/api/v1/users/playground-normal-posts", json={"content": content})
+
+    def create_playground_task_post(self, task_id: str, content: str) -> Any:
+        """发布任务帖。"""
+        return self._request("POST", f"/api/v1/users/playground-task-posts/{task_id}", json={"content": content})
+
+    def get_license_status(self) -> Any:
+        """获取 License 状态。"""
+        return self._request("GET", "/api/v1/license/status")
+
+    def get_license_machine_code(self) -> Any:
+        """获取机器码。"""
+        return self._request("GET", "/api/v1/license/machine-code")
+
+    def import_license(self, license_key: str) -> Any:
+        """导入 License。"""
+        return self._request("POST", "/api/v1/license/import", json={"license": license_key})
+
+    def get_cnb_authorize_url(self) -> Any:
+        """获取 CNB 授权 URL。"""
+        return self._request("GET", "/api/v1/cnb/authorize_url")
+
+    def get_gitea_authorize_url(self) -> Any:
+        """获取 Gitea 授权 URL。"""
+        return self._request("GET", "/api/v1/gitea/authorize_url")
+
+    def get_gitea_sites(self) -> Any:
+        """获取 Gitea 站点列表。"""
+        return self._request("GET", "/api/v1/gitea/sites")
+
+    def get_gitee_authorize_url(self) -> Any:
+        """获取 Gitee 授权 URL。"""
+        return self._request("GET", "/api/v1/gitee/authorize_url")
+
+    def get_gitlab_authorize_url(self) -> Any:
+        """获取 GitLab 授权 URL。"""
+        return self._request("GET", "/api/v1/gitlab/authorize_url")
+
+    def get_gitlab_sites(self) -> Any:
+        """获取 GitLab 站点列表。"""
+        return self._request("GET", "/api/v1/gitlab/sites")
+
+    def build_oauth_login_url(self, provider: str, redirect_url: str | None = None) -> str:
+        """构造 OAuth 登录跳转 URL（供浏览器使用）。"""
+        base = f"{self.base_url}/api/v1/users/oauth/{provider}/login"
+        if redirect_url:
+            from urllib.parse import urlencode
+            return f"{base}?{urlencode({'redirect_url': redirect_url})}"
+        return base
+
+    def build_oidc_login_url(self, team_id: str | None = None) -> str:
+        """构造企业 OIDC 登录跳转 URL（供浏览器使用）。"""
+        base = f"{self.base_url}/api/v1/users/oidc/login"
+        if team_id:
+            from urllib.parse import urlencode
+            return f"{base}?{urlencode({'team_id': team_id})}"
+        return base
+
+    def speech_to_text(self, **fields: Any) -> Any:
+        """语音转文字（提交音频）。"""
+        return self._request("POST", "/api/v1/users/tasks/speech-to-text", json=fields)
+
+    # ---------- 团队管理（管理员控制面） ----------
+
+    def team_admin_initialize(self) -> Any:
+        """初始化团队。"""
+        return self._request("POST", "/api/v1/teams/admin", json={})
+
+    def team_list_groups(self) -> Any:
+        """团队分组列表。"""
+        return self._request("GET", "/api/v1/teams/groups")
+
+    def team_create_group(self, name: str) -> Any:
+        """创建团队分组。"""
+        return self._request("POST", "/api/v1/teams/groups", json={"name": name})
+
+    def team_delete_group(self, group_id: str) -> Any:
+        """删除团队分组。"""
+        return self._request("DELETE", f"/api/v1/teams/groups/{group_id}")
+
+    def team_list_group_users(self, group_id: str) -> Any:
+        """获取分组内用户。"""
+        return self._request("GET", f"/api/v1/teams/groups/{group_id}/users")
+
+    def team_set_group_users(self, group_id: str, user_ids: list[str]) -> Any:
+        """调整分组内用户。"""
+        return self._request("PUT", f"/api/v1/teams/groups/{group_id}/users", json={"user_ids": user_ids})
+
+    def team_list_users(self) -> Any:
+        """团队成员列表。"""
+        return self._request("GET", "/api/v1/teams/users")
+
+    def team_add_user(self, **fields: Any) -> Any:
+        """添加团队成员。"""
+        return self._request("POST", "/api/v1/teams/users", json=fields)
+
+    def team_delete_user(self, user_id: str) -> Any:
+        """删除团队成员。"""
+        return self._request("DELETE", f"/api/v1/teams/users/{user_id}")
+
+    def team_list_hosts(self) -> Any:
+        """团队宿主列表。"""
+        return self._request("GET", "/api/v1/teams/hosts")
+
+    def team_list_images(self) -> Any:
+        """团队镜像列表。"""
+        return self._request("GET", "/api/v1/teams/images")
+
+    def team_list_models(self) -> Any:
+        """团队模型列表。"""
+        return self._request("GET", "/api/v1/teams/models")
+
+    def team_list_skills(self) -> Any:
+        """团队技能列表。"""
+        return self._request("GET", "/api/v1/teams/skills")
+
+    def team_list_projects(self) -> Any:
+        """团队项目列表。"""
+        return self._request("GET", "/api/v1/teams/projects")
+
+    def team_list_tasks(self) -> Any:
+        """团队任务列表。"""
+        return self._request("GET", "/api/v1/teams/tasks")
+
+    def team_get_oidc(self) -> Any:
+        """获取团队 OIDC 配置。"""
+        return self._request("GET", "/api/v1/teams/oidc")
+
+    def team_save_oidc(self, **fields: Any) -> Any:
+        """保存团队 OIDC 配置。"""
+        return self._request("PUT", "/api/v1/teams/oidc", json=fields)
+
+    def team_test_oidc(self, **fields: Any) -> Any:
+        """测试团队 OIDC 配置。"""
+        return self._request("POST", "/api/v1/teams/oidc/test", json=fields)
+
+    def team_list_mcp_upstreams(self) -> Any:
+        """团队 MCP 上游列表。"""
+        return self._request("GET", "/api/v1/teams/mcp/upstreams")
+
+    def team_list_notify_channels(self) -> Any:
+        """团队通知渠道列表。"""
+        return self._request("GET", "/api/v1/teams/notify/channels")
+
+    def team_list_oauth_sites(self) -> Any:
+        """团队 OAuth 站点列表。"""
+        return self._request("GET", "/api/v1/teams/oauth-sites")
+
+    def team_list_extension_packages(self) -> Any:
+        """团队扩展包列表。"""
+        return self._request("GET", "/api/v1/teams/extension-packages")
+
+    def team_get_vm_idle_policy(self) -> Any:
+        """获取 VM 空闲策略。"""
+        return self._request("GET", "/api/v1/teams/task-vm-idle-policy")
+
+    def team_set_vm_idle_policy(self, **fields: Any) -> Any:
+        """设置 VM 空闲策略。"""
+        return self._request("PUT", "/api/v1/teams/task-vm-idle-policy", json=fields)
+
+    def team_list_audits(self) -> Any:
+        """获取团队审计日志。"""
+        return self._request("GET", "/api/v1/teams/audits")
+
+    def team_get_dashboard(self) -> Any:
+        """获取团队 Dashboard。"""
+        return self._request("GET", "/api/v1/teams/dashboard")
+
     # ---------- 任务 ----------
 
     def create_task(

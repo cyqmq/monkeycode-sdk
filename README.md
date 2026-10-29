@@ -111,37 +111,19 @@ data = client.download_file(vm_id, "/root", "a.txt")
 # 预览链接
 links = client.list_task_links(task_id)  # [{url, count, status, http_code}]
 
-# 附件
-client.create_task(content="...", attachments=[{"url": access_url, "filename": "a.txt"}])
-info = client.presign_upload("a.txt")           # 预签名
-client.upload_attachment("a.txt", file_bytes=b"...")  # 上传并返回 access_url
-client.delete_task(task_id)
-client.list_plugins()
-client.list_skills()
-client.get_wallet_transactions()
-client.list_git_branches(identity_id, "owner/repo")
-
-# 可用模型 / Issue
-client.list_available_models()
-client.create_project_issue(project_id, "标题", priority=1)
-client.update_project_issue(project_id, issue_id, status="closed")
-client.list_issue_comments(project_id, issue_id)
-client.add_issue_comment(project_id, issue_id, "评论")
-client.delete_project_issue(project_id, issue_id)
-
-# 文件管理 / VM
-client.move_file(vm_id, "/a", "/b")
-client.copy_file(vm_id, "/a", "/b")
-client.delete_file(vm_id, "/a")
-client.get_vm(vm_id)
-client.delete_vm(host_id, vm_id)
-
-# 任务流控制（WebSocket）
-async with client.open_task_stream(task_id, mode="new") as stream:
-    await stream.send_reply_question("request_id", ["答案"])
-    await stream.send_auto_approve(True)   # 开启自动批准
-    await stream.send_auto_approve(False)  # 关闭自动批准
+# 扩展/管理功能（按需使用）
+client.create_image("img")                    # 镜像 CRUD
+client.list_mcp_upstreams()                   # MCP 管理
+client.list_notify_channels()                 # 通知渠道
+client.change_password("新密码")               # 密码管理
+client.list_members()                         # 团队成员
+client.team_list_tasks()                      # 团队管理（管理员）
+client.get_license_status()                   # License（私有化）
+client.build_oauth_login_url("github")        # OAuth 跳转 URL
 ```
+
+SDK 已覆盖 MonkeyCode REST API 的绝大部分端点（认证/任务/项目/钱包/文件/MCP/通知/团队管理/License/社区等），
+详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 命令行验证
 
