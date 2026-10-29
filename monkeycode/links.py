@@ -72,6 +72,9 @@ def _is_junk(url: str) -> bool:
     # http://localhost: 但没有端口
     if re.match(r"^http://localhost:(\D|$)", url):
         return True
+    # 清洗后只剩 http://localhost（无端口）
+    if re.match(r"^http://localhost$", url):
+        return True
     if url.endswith(":\\") or url.endswith(":/"):
         return True
     return False
@@ -86,7 +89,10 @@ def extract_urls_from_chunk(chunk: dict[str, Any]) -> list[str]:
     text = _unescape(text)
     urls: list[str] = []
     for m in _URL_RE.finditer(text):
-        url = _clean_url(m.group(0))
+        raw_url = m.group(0)
+        if _is_junk(raw_url):
+            continue
+        url = _clean_url(raw_url)
         if url and not _is_junk(url) and _PREVIEW_HOST_RE.search(url):
             urls.append(url)
     return urls

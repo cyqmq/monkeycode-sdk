@@ -61,7 +61,8 @@ print(result.status, result.pr_url)
 |---|---|
 | [docs/认证说明.md](docs/认证说明.md) | 密码/PoW/团队登录、自托管、安全提示 |
 | [docs/功能参考.md](docs/功能参考.md) | 全部功能方法示例（任务/项目/Git/钱包/文件/预览/管理） |
-| [docs/API.md](docs/API.md) | 全部公开方法索引表（196 个） |
+| [docs/API.md](docs/API.md) | 全部公开方法索引表（205 个） |
+| [docs/架构说明.md](docs/架构说明.md) | 模块划分、WebSocket 协议摘要、认证流程 |
 | [docs/CLI.md](docs/CLI.md) | 命令行使用 |
 | [docs/已知问题.md](docs/已知问题.md) | 平台侧已知问题、开发与参考 |
 
