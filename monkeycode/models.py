@@ -1,6 +1,7 @@
 """数据模型（轻量 dataclass，不引入 pydantic 依赖）。"""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -167,6 +168,35 @@ class CaptchaChallenge:
     token: str
     expires: int
     raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class TaskStreamChunk:
+    """任务 WebSocket 流式事件。"""
+
+    type: str
+    data: Any = None
+    timestamp: int = 0
+    turn_seq: int = 0
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UserInputPayload:
+    """上行用户输入（user-input 内层数据）。"""
+
+    content: str
+    attachments: list[dict] = field(default_factory=list)
+
+    def encode(self) -> str:
+        """按协议编码为内层 JSON 字符串（content 为 base64）。"""
+        import base64
+
+        inner = {
+            "content": base64.b64encode(self.content.encode("utf-8")).decode("ascii"),
+            "attachments": self.attachments,
+        }
+        return json.dumps(inner, ensure_ascii=False)
 
 
 @dataclass

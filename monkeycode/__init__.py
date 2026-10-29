@@ -1,6 +1,7 @@
 """MonkeyCode SDK。
 
-封装 MonkeyCode 云平台 REST API，提供认证、任务提交、结果轮询等能力。
+封装 MonkeyCode 云平台 REST API，提供认证、任务提交、结果轮询、
+WebSocket 会话交互等能力。
 """
 from monkeycode.client import MonkeyCodeClient
 from monkeycode.errors import (
@@ -18,10 +19,13 @@ from monkeycode.models import (
     Task,
     TaskExtraConfig,
     TaskRound,
+    TaskStreamChunk,
+    UserInputPayload,
     VMResource,
 )
+from monkeycode.stream import TaskStream
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 __all__ = [
     "MonkeyCodeClient",
@@ -37,5 +41,8 @@ __all__ = [
     "Task",
     "TaskExtraConfig",
     "TaskRound",
+    "TaskStream",
+    "TaskStreamChunk",
+    "UserInputPayload",
     "VMResource",
 ]

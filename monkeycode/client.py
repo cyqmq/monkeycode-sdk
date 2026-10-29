@@ -26,9 +26,11 @@ from monkeycode.models import (
     RepoReq,
     Task,
     TaskExtraConfig,
+    TaskStreamChunk,
     VMResource,
 )
 from monkeycode.pow import solve
+from monkeycode.stream import TaskStream
 
 DEFAULT_BASE_URL = "https://monkeycode-ai.com"
 SESSION_COOKIE = "monkeycode_ai_session"
@@ -397,6 +399,41 @@ class MonkeyCodeClient:
                 return last
             time.sleep(interval)
         raise TaskError(f"等待任务 {task_id} 超时（{timeout}s），最后状态：{last.status}")
+
+    # ---------- WebSocket 会话交互 ----------
+
+    def open_task_stream(self, task_id: str, mode: str = "new") -> TaskStream:
+        """打开任务实时流（WebSocket 上下文管理器）。
+
+        mode="new"：等待用户输入（发送消息用）；
+        mode="attach"：只拉取当前轮次历史 + 订阅实时流（旁观用）。
+        """
+        return TaskStream(self, task_id, mode=mode)
+
+    async def send_task_message(
+        self,
+        task_id: str,
+        content: str,
+        attachments: list[dict] | None = None,
+        read_timeout: float = 30.0,
+    ) -> list[TaskStreamChunk]:
+        """进入任务会话，发送用户消息，返回直到 task-started 的首批事件。
+
+        需要在 asyncio 事件循环中调用（AstrBot 插件环境天然支持）。
+        """
+        stream = TaskStream(self, task_id, mode="new")
+        await stream.connect()
+        try:
+            await stream.send_user_input(content, attachments)
+            events: list[TaskStreamChunk] = []
+            while True:
+                chunk = await stream.recv(timeout=read_timeout)
+                events.append(chunk)
+                if chunk.type in ("task-started", "task-ended", "task-error"):
+                    break
+            return events
+        finally:
+            await stream.close()
 
     # ---------- OhMyAgent API Key ----------
 

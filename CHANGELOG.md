@@ -1,6 +1,16 @@
 # 更新日志
 
-## [0.1.5] - 2026-10-25
+## [0.1.6] - 2026-10-25
+
+### 新增
+- **WebSocket 任务会话交互**：
+  - `send_task_message(task_id, content, attachments=None)`：进入任务会话发送用户消息，返回首批事件
+  - `open_task_stream(task_id, mode="new")`：实时流上下文管理器（可订阅任务运行过程）
+  - `monkeycode/stream.py`：上行 user-input 编码、下行事件解码、基于 websockets 的连接管理
+- 新增模型 `TaskStreamChunk`、`UserInputPayload`
+
+### 依赖
+- 新增 `websockets>=12`
 
 ### 变更
 - `create_task` 的 `repo` 参数改为可选：**不绑定 Git 仓库也能创建任务**（传空 `RepoReq` 即可）

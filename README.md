@@ -54,6 +54,32 @@ print(key.api_key)
 client.delete_api_key(key.key_id)
 ```
 
+## WebSocket 会话交互（实时）
+
+进入运行中的任务会话，发送消息让 agent 继续执行（需在 asyncio 中）：
+
+```python
+import asyncio
+from monkeycode import MonkeyCodeClient
+
+async def main():
+    client = MonkeyCodeClient(email="you@example.com", password="your_password")
+    client.login()
+    # 发送消息并等待 agent 开始执行
+    events = await client.send_task_message(task_id, "请把 README 改成 3 步")
+    for e in events:
+        print(e.type, e.data)
+    # 或长连接实时订阅
+    async with client.open_task_stream(task_id, mode="new") as stream:
+        await stream.send_user_input("继续")
+        while True:
+            chunk = await stream.recv(timeout=60)
+            if chunk.type == "task-ended":
+                break
+
+asyncio.run(main())
+```
+
 ## 命令行验证
 
 ```bash
