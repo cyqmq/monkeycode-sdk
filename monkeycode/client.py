@@ -232,6 +232,10 @@ class MonkeyCodeClient:
             return data.get("models") or []
         return data or []
 
+    def list_available_models(self) -> Any:
+        """获取可用模型列表（仅查询，不做 CRUD）。"""
+        return self._request("GET", "/api/v1/users/models/available")
+
     def list_projects(
         self, cursor: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:
@@ -311,6 +315,99 @@ class MonkeyCodeClient:
             params["limit"] = limit
         return self._request(
             "GET", f"/api/v1/users/projects/{project_id}/issues", params=params
+        )
+
+    def create_project_issue(
+        self,
+        project_id: str,
+        title: str,
+        assignee_id: str | None = None,
+        priority: int | None = None,
+        requirement_document: str | None = None,
+    ) -> Any:
+        """创建项目 Issue。"""
+        body: dict[str, Any] = {"title": title}
+        if assignee_id:
+            body["assignee_id"] = assignee_id
+        if priority is not None:
+            body["priority"] = priority
+        if requirement_document:
+            body["requirement_document"] = requirement_document
+        return self._request(
+            "POST", f"/api/v1/users/projects/{project_id}/issues", json=body
+        )
+
+    def update_project_issue(
+        self,
+        project_id: str,
+        issue_id: str,
+        title: str | None = None,
+        assignee_id: str | None = None,
+        priority: int | None = None,
+        status: str | None = None,
+        requirement_document: str | None = None,
+        design_document: str | None = None,
+    ) -> Any:
+        """更新项目 Issue。"""
+        body: dict[str, Any] = {}
+        if title is not None:
+            body["title"] = title
+        if assignee_id:
+            body["assignee_id"] = assignee_id
+        if priority is not None:
+            body["priority"] = priority
+        if status:
+            body["status"] = status
+        if requirement_document:
+            body["requirement_document"] = requirement_document
+        if design_document:
+            body["design_document"] = design_document
+        return self._request(
+            "PUT",
+            f"/api/v1/users/projects/{project_id}/issues/{issue_id}",
+            json=body,
+        )
+
+    def delete_project_issue(self, project_id: str, issue_id: str) -> Any:
+        """删除项目 Issue。"""
+        return self._request(
+            "DELETE", f"/api/v1/users/projects/{project_id}/issues/{issue_id}"
+        )
+
+    def list_issue_comments(
+        self,
+        project_id: str,
+        issue_id: str,
+        cursor: str | None = None,
+        limit: int | None = None,
+    ) -> Any:
+        """获取 Issue 评论列表。"""
+        params: dict[str, Any] = {}
+        if cursor:
+            params["cursor"] = cursor
+        if limit is not None:
+            params["limit"] = limit
+        return self._request(
+            "GET",
+            f"/api/v1/users/projects/{project_id}/issues/{issue_id}/comments",
+            params=params,
+        )
+
+    def add_issue_comment(
+        self,
+        project_id: str,
+        issue_id: str,
+        comment: str,
+        parent_id: str | None = None,
+    ) -> Any:
+        """创建 Issue 评论。"""
+        body: dict[str, Any] = {"comment": comment}
+        if parent_id:
+            body["parent_id"] = parent_id
+        return self._request(
+            "POST",
+            f"/api/v1/users/projects/{project_id}/issues/{issue_id}/comments",
+            json=body,
         )
 
     # ---------- 插件 / 技能 ----------
@@ -471,6 +568,33 @@ class MonkeyCodeClient:
         if resp.status_code != 200:
             raise APIError(f"下载失败（HTTP {resp.status_code}）：{resp.text[:200]}")
         return resp.content
+
+    def move_file(self, vm_id: str, source: str, target: str) -> Any:
+        """移动/重命名 VM 中的文件或目录。"""
+        body: dict[str, Any] = {"id": vm_id, "source": source, "target": target}
+        return self._request("PUT", "/api/v1/users/files/move", json=body)
+
+    def copy_file(self, vm_id: str, source: str, target: str) -> Any:
+        """复制 VM 中的文件或目录。"""
+        body: dict[str, Any] = {"id": vm_id, "source": source, "target": target}
+        return self._request("POST", "/api/v1/users/files/copy", json=body)
+
+    def delete_file(self, vm_id: str, path: str) -> Any:
+        """删除 VM 中的文件或目录。"""
+        params: dict[str, Any] = {"id": vm_id, "path": path}
+        return self._request("DELETE", "/api/v1/users/files", params=params)
+
+    # ---------- VM 管理 ----------
+
+    def get_vm(self, vm_id: str) -> Any:
+        """获取虚拟机详情。"""
+        return self._request("GET", f"/api/v1/users/hosts/vms/{vm_id}")
+
+    def delete_vm(self, host_id: str, vm_id: str) -> Any:
+        """删除虚拟机。"""
+        return self._request(
+            "DELETE", f"/api/v1/users/hosts/{host_id}/vms/{vm_id}"
+        )
 
     # ---------- 附件上传（任务/消息附件） ----------
 

@@ -117,6 +117,24 @@ class TaskStream:
         """发送取消指令。"""
         await self._ws.send(json.dumps({"type": "user-cancel", "data": ""}))
 
+    async def send_control(self, ctype: str, data: str = "") -> None:
+        """发送任意控制类型消息（如 reply-question / auto-approve）。"""
+        await self._ws.send(json.dumps({"type": ctype, "data": data}))
+
+    async def send_reply_question(
+        self, request_id: str, answers: list[str]
+    ) -> None:
+        """回复 AI 的提问（reply-question）。"""
+        inner = json.dumps(
+            {"request_id": request_id, "answers": answers}, ensure_ascii=False
+        )
+        await self.send_control("reply-question", b64e(inner))
+
+    async def send_auto_approve(self, enable: bool = True) -> None:
+        """开启/关闭自动批准（auto-approve / disable-auto-approve）。"""
+        ctype = "auto-approve" if enable else "disable-auto-approve"
+        await self.send_control(ctype, "")
+
     async def recv(self, timeout: float | None = None) -> TaskStreamChunk:
         """读取并解码一条事件。"""
         raw = await asyncio.wait_for(self._ws.recv(), timeout=timeout)

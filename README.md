@@ -120,6 +120,27 @@ client.list_plugins()
 client.list_skills()
 client.get_wallet_transactions()
 client.list_git_branches(identity_id, "owner/repo")
+
+# 可用模型 / Issue
+client.list_available_models()
+client.create_project_issue(project_id, "标题", priority=1)
+client.update_project_issue(project_id, issue_id, status="closed")
+client.list_issue_comments(project_id, issue_id)
+client.add_issue_comment(project_id, issue_id, "评论")
+client.delete_project_issue(project_id, issue_id)
+
+# 文件管理 / VM
+client.move_file(vm_id, "/a", "/b")
+client.copy_file(vm_id, "/a", "/b")
+client.delete_file(vm_id, "/a")
+client.get_vm(vm_id)
+client.delete_vm(host_id, vm_id)
+
+# 任务流控制（WebSocket）
+async with client.open_task_stream(task_id, mode="new") as stream:
+    await stream.send_reply_question("request_id", ["答案"])
+    await stream.send_auto_approve(True)   # 开启自动批准
+    await stream.send_auto_approve(False)  # 关闭自动批准
 ```
 
 ## 命令行验证

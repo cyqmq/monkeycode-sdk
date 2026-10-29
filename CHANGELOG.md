@@ -1,5 +1,14 @@
 # 更新日志
 
+## [0.1.11] - 2026-10-25
+
+### 新增
+- **可用模型**：`list_available_models()`
+- **Issue 补全**：`create_project_issue` / `update_project_issue` / `delete_project_issue` / `list_issue_comments` / `add_issue_comment`
+- **文件管理补全**：`move_file` / `copy_file` / `delete_file`
+- **VM 管理**：`get_vm` / `delete_vm`
+- **任务流控制**：`TaskStream.send_reply_question`（回复 AI 提问）、`send_auto_approve`（自动批准开关）、`send_control`（任意控制类型）
+
 ## [0.1.10] - 2026-10-25
 
 ### 新增

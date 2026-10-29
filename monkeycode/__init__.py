@@ -25,7 +25,7 @@ from monkeycode.models import (
 )
 from monkeycode.stream import TaskStream
 
-__version__ = "0.1.10"
+__version__ = "0.1.11"
 
 __all__ = [
     "MonkeyCodeClient",
