@@ -52,15 +52,23 @@ export MONKEYCODE_EMAIL=you@example.com
 export MONKEYCODE_PASSWORD=your_password
 
 python cli.py login          # 登录（验证码会提示输入答案）
-python cli.py list-hosts     # 列出云端环境
-python cli.py list-images    # 列出镜像
-python cli.py list-models    # 列出模型
+python cli.py list-hosts     # 列出云端环境（自动先登录）
+python cli.py list-images    # 列出镜像（自动先登录）
+python cli.py list-models    # 列出模型（自动先登录）
 python cli.py run "写一个 hello world"
 ```
 
+除 `login` 外的命令会自动先执行登录，登录失败或需要验证码时会在终端提示。
+
 ## 认证说明
 
-- 登录接口 `POST /api/v1/users/password-login`，密码以 **MD5** 传输。
+- 登录接口 `POST /api/v1/users/password-login`，**传明文密码**。
+  生产平台 `monkeycode-ai.com` 使用 bcrypt 存储并直接校验明文（swagger 中"MD5"注释已过时）。
+  如你的私有化部署仍要求 MD5，构造客户端时传 `password_md5=True` 兼容。
+- 列表接口返回嵌套结构，SDK 已自动提取：
+  - `list_hosts()` → `data["hosts"]`
+  - `list_images()` → `data["images"]`
+  - `list_models()` → `data["models"]`
 - 云平台启用了验证码（`captcha_enabled: true`），登录可能返回需要 `captcha_token`。
   流程：
   1. `POST /api/v1/public/captcha/challenge` 获取验证码质询
@@ -74,6 +82,12 @@ python cli.py run "写一个 hello world"
 - 不要在公共仓库/聊天中泄露你的密码。
 - 建议登录一次后创建 **API Key**（`POST /api/v1/users/ohmyagent/api-keys`），后续用 Key 认证（SDK 的 API Key 支持将在后续版本加入）。
 - SDK 不落盘任何凭证。
+
+## 已知问题（平台侧）
+
+- 创建任务时可能返回 `code=10205 主机不在线`：列表接口中 `status=online` 的宿主，
+  其底层 taskflow 代理可能实际不可调度。这是 MonkeyCode 云平台/环境问题，非 SDK 问题。
+  请在 MonkeyCode 控制台确认云端环境已真正启动，或重建一个环境后再试。
 
 ## 开发
 

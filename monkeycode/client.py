@@ -51,9 +51,11 @@ class MonkeyCodeClient:
         password: str | None = None,
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = 30.0,
+        password_md5: bool = False,
     ) -> None:
         self.email = email
-        self._password_md5 = _md5(password) if password else None
+        self._password = password or ""
+        self._password_md5_mode = password_md5
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(
             base_url=self.base_url,
@@ -65,16 +67,20 @@ class MonkeyCodeClient:
     # ---------- 认证 ----------
 
     def login(self, captcha_token: str | None = None) -> dict[str, Any]:
-        """使用邮箱 + 密码登录（密码 MD5 传输）。
+        """使用邮箱 + 密码登录。
+
+        生产平台 monkeycode-ai.com 使用 bcrypt 校验，需传**明文密码**；
+        早期/部分私有化部署可能要求 MD5，可用 password_md5=True 兼容。
 
         云平台可能启用验证码：先调用 create_captcha / redeem_captcha 获取
         captcha_token 后传入。登录成功后自动保存会话 Cookie。
         """
-        if not self.email or not self._password_md5:
+        if not self.email or not self._password:
             raise AuthenticationError("缺少邮箱或密码，请在构造客户端时传入。")
+        password = _md5(self._password) if self._password_md5_mode else self._password
         body: dict[str, Any] = {
             "email": self.email,
-            "password": self._password_md5,
+            "password": password,
         }
         if captcha_token:
             body["captcha_token"] = captcha_token
@@ -121,20 +127,32 @@ class MonkeyCodeClient:
     # ---------- 枚举环境 ----------
 
     def list_hosts(self) -> list[dict[str, Any]]:
-        """获取可用的云端宿主/环境列表。"""
-        return self._request("GET", "/api/v1/users/hosts") or []
+        """获取可用的云端宿主/环境列表（返回 data.hosts）。"""
+        data = self._request("GET", "/api/v1/users/hosts")
+        if isinstance(data, dict):
+            return data.get("hosts") or []
+        return data or []
 
     def list_images(self) -> list[dict[str, Any]]:
-        """获取可用的镜像列表。"""
-        return self._request("GET", "/api/v1/users/images") or []
+        """获取可用的镜像列表（返回 data.images）。"""
+        data = self._request("GET", "/api/v1/users/images")
+        if isinstance(data, dict):
+            return data.get("images") or []
+        return data or []
 
     def list_models(self) -> list[dict[str, Any]]:
-        """获取可用的模型列表。"""
-        return self._request("GET", "/api/v1/users/models") or []
+        """获取可用的模型列表（返回 data.models）。"""
+        data = self._request("GET", "/api/v1/users/models")
+        if isinstance(data, dict):
+            return data.get("models") or []
+        return data or []
 
     def list_projects(self) -> list[dict[str, Any]]:
         """获取项目（仓库）列表。"""
-        return self._request("GET", "/api/v1/users/projects") or []
+        data = self._request("GET", "/api/v1/users/projects")
+        if isinstance(data, dict):
+            return data.get("projects") or []
+        return data or []
 
     # ---------- 任务 ----------
 

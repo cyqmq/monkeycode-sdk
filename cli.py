@@ -114,7 +114,10 @@ def main() -> None:
     with MonkeyCodeClient(email=email, password=password, base_url=args.base_url) as client:
         if args.command == "login":
             interactive_login(client)
-        elif args.command == "list-hosts":
+            return
+        # 列表/任务命令需要登录态
+        interactive_login(client)
+        if args.command == "list-hosts":
             print_json(client.list_hosts())
         elif args.command == "list-images":
             print_json(client.list_images())
