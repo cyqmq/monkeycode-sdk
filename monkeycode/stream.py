@@ -29,6 +29,35 @@ def b64d(s: str) -> str:
     return base64.b64decode(s).decode("utf-8")
 
 
+def _ws_url(base_url: str, path: str) -> str:
+    """将 HTTP(S) base_url 转为 ws(s) 前缀并拼接 API 路径。
+
+    自托管部署时 base_url 传私有地址，协议自动转换。
+    """
+    if base_url.startswith("https://"):
+        ws_base = "wss://" + base_url[len("https://"):]
+    elif base_url.startswith("http://"):
+        ws_base = "ws://" + base_url[len("http://"):]
+    else:
+        ws_base = base_url
+    return f"{ws_base}{path}"
+
+
+def _session_headers(client: Any) -> dict[str, str]:
+    """提取登录会话 Cookie 作为 WebSocket 请求头。
+
+    同时兼容用户登录与团队登录两种会话 Cookie。
+    """
+    cookies = []
+    for name in ("monkeycode_ai_session", "monkeycode_ai_team_session"):
+        cookie = client._client.cookies.get(name)
+        if cookie:
+            cookies.append(f"{name}={cookie}")
+    if cookies:
+        return {"Cookie": "; ".join(cookies)}
+    return {}
+
+
 def encode_user_input(
     content: str, attachments: list[dict] | None = None
 ) -> str:
@@ -87,23 +116,15 @@ class TaskStream:
         self._ws: Any = None
 
     def _url(self) -> str:
-        base = self.client.base_url
-        if base.startswith("https://"):
-            ws_base = "wss://" + base[len("https://"):]
-        elif base.startswith("http://"):
-            ws_base = "ws://" + base[len("http://"):]
-        else:
-            ws_base = base
-        return f"{ws_base}/api/v1/users/tasks/stream?id={self.task_id}&mode={self.mode}"
+        return _ws_url(
+            self.client.base_url,
+            f"/api/v1/users/tasks/stream?id={self.task_id}&mode={self.mode}",
+        )
 
     async def connect(self) -> None:
         """建立 WebSocket 连接（携带登录 Cookie）。"""
-        session_cookie = self.client._client.cookies.get("monkeycode_ai_session")
-        headers: dict[str, str] = {}
-        if session_cookie:
-            headers["Cookie"] = f"monkeycode_ai_session={session_cookie}"
         self._ws = await websockets.connect(
-            self._url(), additional_headers=headers
+            self._url(), additional_headers=_session_headers(self.client)
         )
 
     async def send_user_input(
@@ -146,6 +167,134 @@ class TaskStream:
             self._ws = None
 
     async def __aenter__(self) -> "TaskStream":
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.close()
+
+
+class ControlStream:
+    """任务控制通道（WebSocket）。
+
+    用于同步调用类操作：switch_model / restart / 文件浏览 / 端口转发等。
+    端点：/api/v1/users/tasks/control?id=<task_id>
+
+    上行消息：
+        {"type": "call", "kind": "<kind>", "data": "<base64(JSON)>"}
+    下行消息：
+        {"type": "call-response", "kind": "<kind>",
+         "data": "<base64(响应JSON)>", "timestamp": 0}
+
+    注意：data 必须是 base64(JSON字符串)，服务端 Go 的 []byte 字段
+    会自动 base64 解码后再反序列化。
+    """
+
+    def __init__(self, client: Any, task_id: str) -> None:
+        self.client = client
+        self.task_id = task_id
+        self._ws: Any = None
+
+    def _url(self) -> str:
+        return _ws_url(
+            self.client.base_url,
+            f"/api/v1/users/tasks/control?id={self.task_id}",
+        )
+
+    async def connect(self) -> None:
+        """建立 WebSocket 连接（携带登录 Cookie）。"""
+        self._ws = await websockets.connect(
+            self._url(), additional_headers=_session_headers(self.client)
+        )
+
+    async def send_call(self, kind: str, data: dict[str, Any]) -> None:
+        """发送控制调用。data 会被 base64(JSON) 编码后放入外层 data。"""
+        inner = json.dumps(data, ensure_ascii=False)
+        msg = {"type": "call", "kind": kind, "data": b64e(inner)}
+        await self._ws.send(json.dumps(msg, ensure_ascii=False))
+
+    async def recv(self, timeout: float | None = None) -> TaskStreamChunk:
+        """读取并解码一条控制通道事件。"""
+        raw = await asyncio.wait_for(self._ws.recv(), timeout=timeout)
+        return decode_chunk(raw)
+
+    async def close(self) -> None:
+        if self._ws is not None:
+            await self._ws.close()
+            self._ws = None
+
+    async def __aenter__(self) -> "ControlStream":
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await self.close()
+
+
+class TerminalStream:
+    """虚拟机终端流（WebSocket）。
+
+    端点：/api/v1/users/hosts/vms/{vm_id}/terminals/connect
+
+    上行消息：
+        {"type": "data",   "data": "<base64(输入字节)>"}
+        {"type": "resize", "data": "<base64({\"col\":..,\"row\":..})>"}
+    下行消息：
+        connected / data / resize / error / ping / pong
+    """
+
+    def __init__(
+        self,
+        client: Any,
+        vm_id: str,
+        terminal_id: str | None = None,
+        col: int = 80,
+        row: int = 24,
+    ) -> None:
+        self.client = client
+        self.vm_id = vm_id
+        self.terminal_id = terminal_id
+        self.col = col
+        self.row = row
+        self._ws: Any = None
+
+    def _url(self) -> str:
+        path = f"/api/v1/users/hosts/vms/{self.vm_id}/terminals/connect"
+        params = [f"col={self.col}", f"row={self.row}"]
+        if self.terminal_id:
+            params.append(f"terminal_id={self.terminal_id}")
+        return _ws_url(self.client.base_url, f"{path}?{'&'.join(params)}")
+
+    async def connect(self) -> None:
+        """建立 WebSocket 连接（携带登录 Cookie）。"""
+        self._ws = await websockets.connect(
+            self._url(), additional_headers=_session_headers(self.client)
+        )
+
+    async def send_data(self, data: bytes | str) -> None:
+        """发送终端输入（字符串或字节）。"""
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        msg = {"type": "data", "data": b64e(data)}
+        await self._ws.send(json.dumps(msg, ensure_ascii=False))
+
+    async def send_resize(self, col: int, row: int) -> None:
+        """调整终端尺寸。"""
+        inner = json.dumps({"col": col, "row": row})
+        msg = {"type": "resize", "data": b64e(inner)}
+        await self._ws.send(json.dumps(msg, ensure_ascii=False))
+
+    async def recv(self, timeout: float | None = None) -> TaskStreamChunk:
+        """读取并解码一条终端事件（data 自动 base64 解码）。"""
+        raw = await asyncio.wait_for(self._ws.recv(), timeout=timeout)
+        return decode_chunk(raw)
+
+    async def close(self) -> None:
+        if self._ws is not None:
+            await self._ws.close()
+            self._ws = None
+
+    async def __aenter__(self) -> "TerminalStream":
         await self.connect()
         return self
 

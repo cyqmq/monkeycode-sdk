@@ -32,7 +32,7 @@ from monkeycode.models import (
 )
 from monkeycode.links import check_url_status, collect_preview_links
 from monkeycode.pow import solve
-from monkeycode.stream import TaskStream
+from monkeycode.stream import ControlStream, TaskStream, TerminalStream
 
 DEFAULT_BASE_URL = "https://monkeycode-ai.com"
 SESSION_COOKIE = "monkeycode_ai_session"
@@ -1203,6 +1203,119 @@ class MonkeyCodeClient:
             return events
         finally:
             await stream.close()
+
+    # ---------- 任务控制 / 选项 / 终端 ----------
+
+    def get_task_options(self) -> dict[str, Any]:
+        """聚合创建任务所需的下拉选项，一次返回。
+
+        对应桌面端 mc_task_options：聚合多个 REST 列表接口。
+        返回 {models, images, hosts, projects, plan}。
+        """
+        subscription = self.get_subscription()
+        plan = ""
+        if isinstance(subscription, dict):
+            plan = subscription.get("plan") or ""
+        return {
+            "models": self.list_models(),
+            "images": self.list_images(),
+            "hosts": self.list_hosts(),
+            "projects": self.list_projects(),
+            "plan": plan,
+        }
+
+    def open_task_control(self, task_id: str) -> ControlStream:
+        """打开任务控制通道（WebSocket 上下文管理器）。
+
+        用于 switch_model / restart / 文件浏览 / 端口转发等同步调用。
+        """
+        return ControlStream(self, task_id)
+
+    async def switch_task_model(
+        self,
+        task_id: str,
+        model_id: str,
+        load_session: bool = True,
+        timeout: float = 30.0,
+    ) -> dict[str, Any]:
+        """切换运行中任务的模型（走 control 通道）。
+
+        成功时返回服务端响应 dict（含 session_id / model）；
+        失败时返回 {"success": False, "error": "..."}。
+        """
+        stream = ControlStream(self, task_id)
+        await stream.connect()
+        try:
+            await stream.send_call(
+                "switch_model",
+                {"model_id": str(model_id), "load_session": load_session},
+            )
+            while True:
+                chunk = await stream.recv(timeout=timeout)
+                if chunk.type == "call-response":
+                    data = chunk.data
+                    if isinstance(data, dict):
+                        return data
+                    return {"success": False, "error": str(data)}
+                if chunk.type == "error":
+                    return {"success": False, "error": str(chunk.data)}
+        finally:
+            await stream.close()
+
+    def list_terminal_sessions(self, vm_id: str) -> list[dict[str, Any]]:
+        """获取虚拟机终端会话列表。"""
+        data = self._request(
+            "GET", f"/api/v1/users/hosts/vms/{vm_id}/terminals"
+        )
+        if isinstance(data, dict):
+            return (
+                data.get("terminals")
+                or data.get("sessions")
+                or data.get("list")
+                or []
+            )
+        return data or []
+
+    def share_terminal(
+        self,
+        vm_id: str,
+        mode: str = "read_write",
+        terminal_id: str | None = None,
+    ) -> Any:
+        """分享终端，返回 {password}。
+
+        mode 支持 read_write / read_only；terminal_id 可选。
+        """
+        body: dict[str, Any] = {"mode": mode}
+        if terminal_id:
+            body["terminal_id"] = terminal_id
+        return self._request(
+            "POST",
+            f"/api/v1/users/hosts/vms/{vm_id}/terminals/share",
+            json=body,
+        )
+
+    def close_terminal(self, vm_id: str, terminal_id: str) -> Any:
+        """关闭指定终端会话。"""
+        return self._request(
+            "DELETE",
+            f"/api/v1/users/hosts/vms/{vm_id}/terminals/{terminal_id}",
+        )
+
+    def open_terminal(
+        self,
+        vm_id: str,
+        terminal_id: str | None = None,
+        col: int = 80,
+        row: int = 24,
+    ) -> TerminalStream:
+        """打开虚拟机终端流（WebSocket 上下文管理器）。
+
+        终端输出/输入均为原始字节，data 消息自动 base64 解码。
+        """
+        return TerminalStream(
+            self, vm_id, terminal_id=terminal_id, col=col, row=row
+        )
 
     # ---------- OhMyAgent API Key ----------
 

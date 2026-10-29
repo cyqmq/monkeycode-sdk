@@ -1,5 +1,16 @@
 # 更新日志
 
+## [1.1.0] - 2026-10-25
+
+### 新增
+- **会话换模型**：`switch_task_model` / `open_task_control`（WebSocket 控制通道 `/tasks/control`，data 需 base64(JSON)）
+- **命令下拉选项**：`get_task_options` 聚合 models/images/hosts/projects/plan 一次返回
+- **终端**：`list_terminal_sessions` / `share_terminal` / `close_terminal` / `open_terminal`（REST + WebSocket 交互，支持 data/resize）
+- 导出 `ControlStream` / `TerminalStream`
+
+### 其他
+- 新增 `scripts/check_version.py` 发布前版本一致性检查
+
 ## [1.0.1] - 2026-10-25
 
 ### 文档

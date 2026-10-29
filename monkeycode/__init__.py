@@ -23,9 +23,9 @@ from monkeycode.models import (
     UserInputPayload,
     VMResource,
 )
-from monkeycode.stream import TaskStream
+from monkeycode.stream import ControlStream, TaskStream, TerminalStream
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 __all__ = [
     "MonkeyCodeClient",
@@ -45,4 +45,6 @@ __all__ = [
     "TaskStreamChunk",
     "UserInputPayload",
     "VMResource",
+    "ControlStream",
+    "TerminalStream",
 ]

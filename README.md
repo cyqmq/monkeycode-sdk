@@ -6,7 +6,9 @@ MonkeyCode 云平台 REST API 的 Python SDK。用于在任意 Python 项目/聊
 **特性**
 - 密码登录 / 团队登录 / PoW 验证码全自动求解
 - 任务创建（附件、技能、默认档位）、列表、轮询、WebSocket 实时会话
+- 任务控制通道：切换模型、端口转发等同步调用
 - 项目管理、Git 身份、Git Bots、钱包签到、文件/VM 管理、预览链接
+- 虚拟机终端：会话管理（REST）+ 实时交互（WebSocket）
 - 覆盖完整 REST API（镜像/MCP/通知/团队管理/License/社区等）
 - 支持自托管部署
 
