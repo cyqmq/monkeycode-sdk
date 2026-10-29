@@ -218,6 +218,30 @@ class MonkeyCodeClient:
             return data.get("hosts") or []
         return data or []
 
+    # ---------- 宿主机管理 ----------
+
+    def create_host(self, **fields: Any) -> Any:
+        """注册宿主机。
+
+        字段以关键字参数传入（如 name、host_id、api_key、备注等），
+        与平台前端注册表单保持一致。
+        """
+        return self._request("POST", "/api/v1/users/hosts", json=fields)
+
+    def update_host(self, host_id: str, **fields: Any) -> Any:
+        """更新宿主机配置。"""
+        return self._request(
+            "PUT", f"/api/v1/users/hosts/{host_id}", json=fields
+        )
+
+    def delete_host(self, host_id: str) -> Any:
+        """删除宿主机。"""
+        return self._request("DELETE", f"/api/v1/users/hosts/{host_id}")
+
+    def get_host_install_command(self) -> Any:
+        """获取宿主机安装命令（用于接入新宿主机）。"""
+        return self._request("GET", "/api/v1/users/hosts/install-command")
+
     def list_images(self) -> list[dict[str, Any]]:
         """获取可用的镜像列表（返回 data.images）。"""
         data = self._request("GET", "/api/v1/users/images")
@@ -235,6 +259,47 @@ class MonkeyCodeClient:
     def list_available_models(self) -> Any:
         """获取可用模型列表（仅查询，不做 CRUD）。"""
         return self._request("GET", "/api/v1/users/models/available")
+
+    # ---------- AI 大模型管理 ----------
+
+    def create_model(self, **fields: Any) -> Any:
+        """创建模型配置。
+
+        字段以关键字参数传入（如 name、provider、api_key、base_url 等），
+        与平台前端表单字段保持一致。
+        """
+        return self._request("POST", "/api/v1/users/models", json=fields)
+
+    def update_model(self, model_id: str, **fields: Any) -> Any:
+        """更新模型配置（如 API Key、备注、供应商等）。"""
+        return self._request(
+            "PUT", f"/api/v1/users/models/{model_id}", json=fields
+        )
+
+    def delete_model(self, model_id: str) -> Any:
+        """删除模型配置。"""
+        return self._request("DELETE", f"/api/v1/users/models/{model_id}")
+
+    def list_model_providers(self) -> Any:
+        """列出模型供应商。"""
+        return self._request("GET", "/api/v1/users/models/providers")
+
+    def model_health_check(self, model_ids: list[str]) -> Any:
+        """批量执行模型健康检查。
+
+        model_ids 为模型 ID 列表，返回各模型连通性/鉴权结果。
+        """
+        return self._request(
+            "POST",
+            "/api/v1/users/models/health-check",
+            json={"model_ids": model_ids},
+        )
+
+    def get_model_health_check(self, model_id: str) -> Any:
+        """获取单个模型健康检查结果。"""
+        return self._request(
+            "GET", f"/api/v1/users/models/{model_id}/health-check"
+        )
 
     def list_projects(
         self, cursor: str | None = None, limit: int | None = None
@@ -490,6 +555,23 @@ class MonkeyCodeClient:
             body["organization_id"] = organization_id
         return self._request("POST", "/api/v1/users/git-identities", json=body)
 
+    def update_git_identity(
+        self, identity_id: str, **fields: Any
+    ) -> Any:
+        """更新 Git 身份（token/备注/组织等）。
+
+        字段以关键字参数传入，如 access_token、remark、organization_id。
+        """
+        return self._request(
+            "PUT", f"/api/v1/users/git-identities/{identity_id}", json=fields
+        )
+
+    def delete_git_identity(self, identity_id: str) -> Any:
+        """删除 Git 身份。"""
+        return self._request(
+            "DELETE", f"/api/v1/users/git-identities/{identity_id}"
+        )
+
     def list_git_bots(self) -> Any:
         """获取 Git Bot 列表。"""
         return self._request("GET", "/api/v1/users/git-bots")
@@ -594,6 +676,54 @@ class MonkeyCodeClient:
         """删除虚拟机。"""
         return self._request(
             "DELETE", f"/api/v1/users/hosts/{host_id}/vms/{vm_id}"
+        )
+
+    def create_vm(self, host_id: str, **fields: Any) -> Any:
+        """创建虚拟机/开发环境。
+
+        字段以关键字参数传入（如 image_id、resource、名称等），
+        与平台前端创建表单保持一致。
+        """
+        return self._request(
+            "POST", f"/api/v1/users/hosts/{host_id}/vms", json=fields
+        )
+
+    def update_vm(self, host_id: str, vm_id: str, **fields: Any) -> Any:
+        """更新虚拟机（如续期、调整配置）。"""
+        return self._request(
+            "PUT",
+            f"/api/v1/users/hosts/{host_id}/vms/{vm_id}",
+            json=fields,
+        )
+
+    # ---------- 端口转发 ----------
+
+    def list_port_forwards(self, host_id: str, vm_id: str) -> Any:
+        """列出虚拟机的端口转发规则。"""
+        return self._request(
+            "GET", f"/api/v1/users/hosts/{host_id}/vms/{vm_id}/ports"
+        )
+
+    def add_port_forward(
+        self, host_id: str, vm_id: str, **fields: Any
+    ) -> Any:
+        """添加端口转发规则。
+
+        字段以关键字参数传入（如 port、target 等），与平台前端一致。
+        """
+        return self._request(
+            "POST",
+            f"/api/v1/users/hosts/{host_id}/vms/{vm_id}/ports",
+            json=fields,
+        )
+
+    def delete_port_forward(
+        self, host_id: str, vm_id: str, port: int | str
+    ) -> Any:
+        """删除端口转发规则。"""
+        return self._request(
+            "DELETE",
+            f"/api/v1/users/hosts/{host_id}/vms/{vm_id}/ports/{port}",
         )
 
     # ---------- 附件上传（任务/消息附件） ----------

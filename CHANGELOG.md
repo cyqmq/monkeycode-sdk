@@ -1,5 +1,13 @@
 # 更新日志
 
+## [1.2.0] - 2026-10-29
+
+### 新增（配置管理补全，+17 方法，总计 152）
+- **Git 身份**：`update_git_identity` / `delete_git_identity`
+- **AI 大模型管理**：`create_model` / `update_model` / `delete_model` / `list_model_providers` / `model_health_check`（批量）/ `get_model_health_check`（单个）
+- **宿主机管理**：`create_host` / `update_host` / `delete_host` / `get_host_install_command`
+- **开发环境 / VM**：`create_vm` / `update_vm` / `list_port_forwards` / `add_port_forward` / `delete_port_forward`
+
 ## [1.1.0] - 2026-10-25
 
 ### 新增
