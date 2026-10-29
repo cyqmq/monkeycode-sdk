@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 from monkeycode import (
     AuthenticationError,
@@ -24,6 +25,14 @@ from monkeycode import (
     TaskError,
 )
 from monkeycode.models import RepoReq
+
+
+def default_session_path() -> str:
+    """默认会话持久化文件路径（可用环境变量覆盖）。"""
+    return os.environ.get(
+        "MONKEYCODE_SESSION",
+        str(Path.home() / ".monkeycode_session.json"),
+    )
 
 
 def get_credentials() -> tuple[str, str]:
@@ -106,6 +115,11 @@ def main() -> None:
         default=os.environ.get("MONKEYCODE_BASE_URL", "https://monkeycode-ai.com"),
         help="MonkeyCode API 地址",
     )
+    parser.add_argument(
+        "--session",
+        default=default_session_path(),
+        help="会话 Cookie 持久化文件路径",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("login", help="登录并保存会话")
@@ -123,12 +137,20 @@ def main() -> None:
 
     args = parser.parse_args()
     email, password = get_credentials()
-    with MonkeyCodeClient(email=email, password=password, base_url=args.base_url) as client:
+    with MonkeyCodeClient(
+        email=email,
+        password=password,
+        base_url=args.base_url,
+        session_path=args.session,
+    ) as client:
         if args.command == "login":
             interactive_login(client)
             return
-        # 列表/任务命令需要登录态
-        interactive_login(client)
+        # 有持久化会话则直接使用；无效时 SDK 会自动重登
+        try:
+            client.whoami()
+        except AuthenticationError:
+            interactive_login(client)
         if args.command == "whoami":
             cmd_whoami(client)
         elif args.command == "logout":

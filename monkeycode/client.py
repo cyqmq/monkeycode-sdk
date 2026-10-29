@@ -6,7 +6,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -64,17 +67,23 @@ class MonkeyCodeClient:
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = 30.0,
         password_md5: bool = False,
+        session_path: str | None = None,
+        auto_relogin: bool = True,
     ) -> None:
         self.email = email
         self._password = password or ""
         self._password_md5_mode = password_md5
         self.base_url = base_url.rstrip("/")
+        self._session_path = session_path
+        self._auto_relogin = auto_relogin
+        self._relogging = False
         self._client = httpx.Client(
             base_url=self.base_url,
             timeout=timeout,
             follow_redirects=True,
         )
         self._logged_in = False
+        self._load_session()
 
     # ---------- 认证 ----------
 
@@ -118,6 +127,7 @@ class MonkeyCodeClient:
                 ) from exc
             raise
         self._logged_in = True
+        self._save_session()
         return data
 
     def _solve_captcha(self) -> str:
@@ -170,16 +180,63 @@ class MonkeyCodeClient:
         return self.get_user_status()
 
     def logout(self) -> Any:
-        """退出当前用户会话（清除云端登录态）。"""
+        """退出当前用户会话（清除云端登录态并删除本地会话文件）。"""
         result = self._request("POST", "/api/v1/users/logout")
         self._logged_in = False
+        self._clear_session()
         return result
 
     def team_logout(self) -> Any:
-        """退出团队管理员会话。"""
+        """退出团队管理员会话（清除云端登录态并删除本地会话文件）。"""
         result = self._request("POST", "/api/v1/teams/users/logout")
         self._logged_in = False
+        self._clear_session()
         return result
+
+    # ---------- 会话持久化 ----------
+
+    def _save_session(self) -> None:
+        """将当前会话 Cookie 持久化到 session_path（可选）。"""
+        if not self._session_path:
+            return
+        try:
+            cookies = {
+                name: value for name, value in self._client.cookies.items()
+            }
+            path = Path(self._session_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(cookies), encoding="utf-8")
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+        except OSError:
+            pass
+
+    def _load_session(self) -> None:
+        """从 session_path 加载持久化 Cookie（可选）。"""
+        if not self._session_path:
+            return
+        try:
+            path = Path(self._session_path)
+            if not path.exists():
+                return
+            cookies = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        for name, value in cookies.items():
+            self._client.cookies.set(name, value)
+        if cookies:
+            self._logged_in = True
+
+    def _clear_session(self) -> None:
+        """删除本地会话文件（退出登录时调用）。"""
+        if not self._session_path:
+            return
+        try:
+            Path(self._session_path).unlink(missing_ok=True)
+        except OSError:
+            pass
 
     def team_list_conversations(self) -> Any:
         """获取团队 agent 会话列表（管理端）。"""
@@ -1670,6 +1727,7 @@ class MonkeyCodeClient:
         params: dict[str, Any] | None = None,
         auth_required: bool = True,
         files: dict[str, Any] | None = None,
+        _retry: bool = True,
     ) -> Any:
         try:
             resp = self._client.request(
@@ -1679,6 +1737,32 @@ class MonkeyCodeClient:
             raise APIError(f"请求失败：{exc}") from exc
 
         if resp.status_code == 401:
+            if (
+                _retry
+                and auth_required
+                and self._auto_relogin
+                and not self._relogging
+                and self.email
+                and self._password
+            ):
+                # 会话过期：自动重新登录后重试原请求一次
+                self._relogging = True
+                try:
+                    self.login()
+                except AuthenticationError:
+                    pass
+                finally:
+                    self._relogging = False
+                if self._logged_in:
+                    return self._request(
+                        method,
+                        path,
+                        json=json,
+                        params=params,
+                        auth_required=auth_required,
+                        files=files,
+                        _retry=False,
+                    )
             raise AuthenticationError("未认证或会话已失效，请重新登录。", code=401)
         if resp.status_code == 429:
             raise RateLimitError("触发限流（HTTP 429），请稍后重试。", code=429)

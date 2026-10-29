@@ -23,6 +23,7 @@ from monkeycode.models import (
     UserInputPayload,
     VMResource,
 )
+from monkeycode.session import AgentSession
 from monkeycode.stream import (
     ControlStream,
     JoinTerminalStream,
@@ -30,7 +31,7 @@ from monkeycode.stream import (
     TerminalStream,
 )
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 __all__ = [
     "MonkeyCodeClient",
@@ -53,4 +54,5 @@ __all__ = [
     "ControlStream",
     "TerminalStream",
     "JoinTerminalStream",
+    "AgentSession",
 ]
