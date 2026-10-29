@@ -1216,6 +1216,212 @@ class MonkeyCodeClient:
         """获取团队 Dashboard。"""
         return self._request("GET", "/api/v1/teams/dashboard")
 
+    # ---------- 团队用户（管理写操作） ----------
+
+    def team_get_user_status(self) -> Any:
+        """查询当前团队用户状态（团队会话）。"""
+        return self._request("GET", "/api/v1/teams/users/status")
+
+    def team_change_password(self, **fields: Any) -> Any:
+        """团队用户修改密码。"""
+        return self._request(
+            "PUT", "/api/v1/teams/users/passwords/change", json=fields
+        )
+
+    def team_add_user_with_password(self, **fields: Any) -> Any:
+        """创建团队成员并返回初始密码（仅响应返回一次）。"""
+        return self._request(
+            "POST", "/api/v1/teams/users/with-password", json=fields
+        )
+
+    def team_update_user(self, user_id: str, **fields: Any) -> Any:
+        """更新团队成员信息。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/users/{user_id}", json=fields
+        )
+
+    def team_reset_user_password(self, user_id: str) -> Any:
+        """管理员重置成员密码（仅响应返回一次）。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/users/{user_id}/passwords/reset"
+        )
+
+    # ---------- 团队分组（管理写操作） ----------
+
+    def team_update_group(self, group_id: str, name: str) -> Any:
+        """更新分组名称。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/groups/{group_id}", json={"name": name}
+        )
+
+    # ---------- 团队宿主（管理写操作） ----------
+
+    def team_get_host_install_command(self) -> Any:
+        """获取团队宿主机安装命令。"""
+        return self._request("GET", "/api/v1/teams/hosts/install-command")
+
+    def team_update_host(self, host_id: str, **fields: Any) -> Any:
+        """更新团队宿主机。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/hosts/{host_id}", json=fields
+        )
+
+    def team_delete_host(self, host_id: str) -> Any:
+        """删除团队宿主机。"""
+        return self._request("DELETE", f"/api/v1/teams/hosts/{host_id}")
+
+    # ---------- 团队镜像（管理写操作） ----------
+
+    def team_create_image(self, **fields: Any) -> Any:
+        """创建团队镜像。"""
+        return self._request("POST", "/api/v1/teams/images", json=fields)
+
+    def team_update_image(self, image_id: str, **fields: Any) -> Any:
+        """更新团队镜像。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/images/{image_id}", json=fields
+        )
+
+    def team_delete_image(self, image_id: str) -> Any:
+        """删除团队镜像。"""
+        return self._request("DELETE", f"/api/v1/teams/images/{image_id}")
+
+    # ---------- 团队模型（管理写操作） ----------
+
+    def team_create_model(self, **fields: Any) -> Any:
+        """创建团队模型配置。"""
+        return self._request("POST", "/api/v1/teams/models", json=fields)
+
+    def team_update_model(self, model_id: str, **fields: Any) -> Any:
+        """更新团队模型。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/models/{model_id}", json=fields
+        )
+
+    def team_delete_model(self, model_id: str) -> Any:
+        """删除团队模型。"""
+        return self._request("DELETE", f"/api/v1/teams/models/{model_id}")
+
+    def team_model_health_check(self, model_ids: list[str]) -> Any:
+        """团队模型批量健康检查。"""
+        return self._request(
+            "POST",
+            "/api/v1/teams/models/health-check",
+            json={"model_ids": model_ids},
+        )
+
+    def team_get_model_health_check(self, model_id: str) -> Any:
+        """单个团队模型健康检查。"""
+        return self._request(
+            "GET", f"/api/v1/teams/models/{model_id}/health-check"
+        )
+
+    # ---------- 团队技能（管理写操作） ----------
+
+    def team_create_skill(self, **fields: Any) -> Any:
+        """创建团队技能。"""
+        return self._request("POST", "/api/v1/teams/skills", json=fields)
+
+    def team_create_skill_package(self, **fields: Any) -> Any:
+        """上传/创建团队技能包。"""
+        return self._request(
+            "POST", "/api/v1/teams/skills/package", json=fields
+        )
+
+    def team_update_skill(self, skill_id: str, **fields: Any) -> Any:
+        """更新团队技能。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/skills/{skill_id}", json=fields
+        )
+
+    def team_delete_skill(self, skill_id: str) -> Any:
+        """删除团队技能。"""
+        return self._request("DELETE", f"/api/v1/teams/skills/{skill_id}")
+
+    # ---------- 团队 MCP（管理写操作） ----------
+
+    def team_create_mcp_upstream(self, **fields: Any) -> Any:
+        """创建团队 MCP 上游。"""
+        return self._request(
+            "POST", "/api/v1/teams/mcp/upstreams", json=fields
+        )
+
+    def team_update_mcp_upstream(
+        self, upstream_id: str, **fields: Any
+    ) -> Any:
+        """更新团队 MCP 上游。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/mcp/upstreams/{upstream_id}", json=fields
+        )
+
+    def team_delete_mcp_upstream(self, upstream_id: str) -> Any:
+        """删除团队 MCP 上游。"""
+        return self._request(
+            "DELETE", f"/api/v1/teams/mcp/upstreams/{upstream_id}"
+        )
+
+    def team_sync_mcp_upstream(self, upstream_id: str) -> Any:
+        """同步团队 MCP 上游。"""
+        return self._request(
+            "POST", f"/api/v1/teams/mcp/upstreams/{upstream_id}/sync"
+        )
+
+    # ---------- 团队通知（管理写操作） ----------
+
+    def team_create_notify_channel(self, **fields: Any) -> Any:
+        """创建团队通知渠道。"""
+        return self._request(
+            "POST", "/api/v1/teams/notify/channels", json=fields
+        )
+
+    def team_update_notify_channel(
+        self, channel_id: str, **fields: Any
+    ) -> Any:
+        """更新团队通知渠道。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/notify/channels/{channel_id}", json=fields
+        )
+
+    def team_delete_notify_channel(self, channel_id: str) -> Any:
+        """删除团队通知渠道。"""
+        return self._request(
+            "DELETE", f"/api/v1/teams/notify/channels/{channel_id}"
+        )
+
+    def team_test_notify_channel(self, channel_id: str) -> Any:
+        """测试团队通知渠道。"""
+        return self._request(
+            "POST", f"/api/v1/teams/notify/channels/{channel_id}/test"
+        )
+
+    def team_list_notify_event_types(self) -> Any:
+        """团队通知事件类型列表。"""
+        return self._request("GET", "/api/v1/teams/notify/event-types")
+
+    # ---------- 团队 OAuth 站点（管理写操作） ----------
+
+    def team_create_oauth_site(self, **fields: Any) -> Any:
+        """创建团队 OAuth 站点配置。"""
+        return self._request("POST", "/api/v1/teams/oauth-sites", json=fields)
+
+    def team_update_oauth_site(self, site_id: str, **fields: Any) -> Any:
+        """更新团队 OAuth 站点。"""
+        return self._request(
+            "PUT", f"/api/v1/teams/oauth-sites/{site_id}", json=fields
+        )
+
+    def team_delete_oauth_site(self, site_id: str) -> Any:
+        """删除团队 OAuth 站点。"""
+        return self._request("DELETE", f"/api/v1/teams/oauth-sites/{site_id}")
+
+    # ---------- 团队扩展包（管理写操作） ----------
+
+    def team_create_extension_package(self, **fields: Any) -> Any:
+        """创建团队扩展包。"""
+        return self._request(
+            "POST", "/api/v1/teams/extension-packages", json=fields
+        )
+
     # ---------- 任务 ----------
 
     def create_task(

@@ -1,5 +1,20 @@
 # 更新日志
 
+## [1.5.0] - 2026-10-29
+
+### 新增（团队管理控制面补全，+34 方法，总计 202）
+- **团队用户**：`team_get_user_status` / `team_change_password` / `team_add_user_with_password` / `team_update_user` / `team_reset_user_password`
+- **团队分组**：`team_update_group`
+- **团队宿主**：`team_get_host_install_command` / `team_update_host` / `team_delete_host`
+- **团队镜像**：`team_create_image` / `team_update_image` / `team_delete_image`
+- **团队模型**：`team_create_model` / `team_update_model` / `team_delete_model` / `team_model_health_check` / `team_get_model_health_check`
+- **团队技能**：`team_create_skill` / `team_create_skill_package` / `team_update_skill` / `team_delete_skill`
+- **团队 MCP**：`team_create_mcp_upstream` / `team_update_mcp_upstream` / `team_delete_mcp_upstream` / `team_sync_mcp_upstream`
+- **团队通知**：`team_create_notify_channel` / `team_update_notify_channel` / `team_delete_notify_channel` / `team_test_notify_channel` / `team_list_notify_event_types`
+- **团队 OAuth 站点**：`team_create_oauth_site` / `team_update_oauth_site` / `team_delete_oauth_site`
+- **团队扩展包**：`team_create_extension_package`
+- 覆盖自托管 MonkeyCode 管理员的完整控制面（团队 CRUD 写操作全量补齐）
+
 ## [1.4.1] - 2026-10-29
 
 ### 新增
