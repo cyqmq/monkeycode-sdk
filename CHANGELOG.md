@@ -1,5 +1,12 @@
 # 更新日志
 
+## [1.6.1] - 2026-10-29
+
+### 修复
+- `list_model_providers()` 补充必填参数 `provider` / `base_url` / `api_key`（可选 `api_header`），修复无参调用返回 400
+- CLI `list-model-providers` 命令同步增加位置参数与 `--api-header`
+- 冒烟测试中该项改为跳过（需要真实供应商 API Key）
+
 ## [1.6.0] - 2026-10-29
 
 ### 新增（体验层改进）

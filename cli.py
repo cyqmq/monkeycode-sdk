@@ -209,9 +209,22 @@ def cmd_list_available_models(client: MonkeyCodeClient) -> None:
     print_json(client.list_available_models())
 
 
-def cmd_list_model_providers(client: MonkeyCodeClient) -> None:
-    """列出模型供应商。"""
-    print_json(client.list_model_providers())
+def cmd_list_model_providers(
+    client: MonkeyCodeClient,
+    provider: str,
+    base_url: str,
+    api_key: str,
+    api_header: str | None = None,
+) -> None:
+    """列出模型供应商的模型列表。"""
+    print_json(
+        client.list_model_providers(
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            api_header=api_header,
+        )
+    )
 
 
 def cmd_switch_model(
@@ -249,7 +262,11 @@ def main() -> None:
     sub.add_parser("list-images", help="列出镜像")
     sub.add_parser("list-models", help="列出模型")
     sub.add_parser("list-available-models", help="列出可用模型")
-    sub.add_parser("list-model-providers", help="列出模型供应商")
+    lm_p = sub.add_parser("list-model-providers", help="列出模型供应商的模型列表")
+    lm_p.add_argument("provider", help="供应商：SiliconFlow/OpenAI/Ollama/DeepSeek 等")
+    lm_p.add_argument("base_url", help="Base URL")
+    lm_p.add_argument("api_key", help="API Key")
+    lm_p.add_argument("--api-header", default=None, help="API 请求头")
     sub.add_parser("list-tasks", help="列出最近任务")
     sub.add_parser("wallet", help="查看钱包余额")
     sub.add_parser("checkin", help="每日签到")
@@ -322,7 +339,13 @@ def main() -> None:
         elif args.command == "list-available-models":
             cmd_list_available_models(client)
         elif args.command == "list-model-providers":
-            cmd_list_model_providers(client)
+            cmd_list_model_providers(
+                client,
+                args.provider,
+                args.base_url,
+                args.api_key,
+                args.api_header,
+            )
         elif args.command == "list-tasks":
             cmd_list_tasks(client)
         elif args.command == "wallet":

@@ -42,7 +42,8 @@ python cli.py list-hosts          # 列出云端环境
 python cli.py list-images         # 列出镜像
 python cli.py list-models         # 列出模型
 python cli.py list-available-models   # 列出可用模型
-python cli.py list-model-providers   # 列出模型供应商
+python cli.py list-model-providers <provider> <base_url> <api_key> [--api-header xxx]
+                                      # 列出模型供应商的模型列表（provider/base_url/api_key 必填）
 python cli.py vms                 # 列出各宿主下的虚拟机
 python cli.py terminal <vm_id>    # 列出虚拟机终端会话
 python cli.py list-projects       # 列出项目（仓库）

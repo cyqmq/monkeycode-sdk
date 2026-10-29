@@ -109,7 +109,7 @@ def main() -> None:
         check("list_notify_channels", client.list_notify_channels)
         check("list_notify_event_types", client.list_notify_event_types)
         check("list_available_models", client.list_available_models)
-        check("list_model_providers", client.list_model_providers)
+        print(f"{SKIP} list_model_providers（需要真实供应商 API Key，不属于只读安全测试）")
         check("list_playground_posts", client.list_playground_posts)
         check("get_public_stats", client.get_public_stats)
 

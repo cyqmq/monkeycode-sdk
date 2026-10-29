@@ -393,9 +393,29 @@ class MonkeyCodeClient:
         """删除模型配置。"""
         return self._request("DELETE", f"/api/v1/users/models/{model_id}")
 
-    def list_model_providers(self) -> Any:
-        """列出模型供应商。"""
-        return self._request("GET", "/api/v1/users/models/providers")
+    def list_model_providers(
+        self,
+        provider: str,
+        base_url: str,
+        api_key: str,
+        api_header: str | None = None,
+    ) -> Any:
+        """列出模型供应商的模型列表。
+
+        provider 取值：SiliconFlow / OpenAI / Ollama / DeepSeek /
+        Moonshot / AzureOpenAI / BaiZhiCloud / Hunyuan / BaiLian /
+        Volcengine / Gemini / Other。
+        """
+        params: dict[str, Any] = {
+            "provider": provider,
+            "base_url": base_url,
+            "api_key": api_key,
+        }
+        if api_header:
+            params["api_header"] = api_header
+        return self._request(
+            "GET", "/api/v1/users/models/providers", params=params
+        )
 
     def model_health_check(self, model_ids: list[str]) -> Any:
         """批量执行模型健康检查。
