@@ -1,8 +1,12 @@
 """WebSocket 流编解码单元测试。"""
+import asyncio
 import base64
 import json
 
-from monkeycode.stream import decode_chunk, encode_user_input
+import pytest
+
+from monkeycode.errors import APIError, AuthenticationError
+from monkeycode.stream import _ws_connect, decode_chunk, encode_user_input
 
 
 def test_encode_user_input_structure() -> None:
@@ -50,3 +54,56 @@ def test_decode_chunk_metadata() -> None:
     assert chunk.type == "task-started"
     assert chunk.timestamp == 123
     assert chunk.turn_seq == 5
+
+
+# ---------- 连接异常包装 ----------
+
+class _FakeResp:
+    def __init__(self, status_code: int, body: bytes = b""):
+        self.status_code = status_code
+        self.body = body
+
+
+def _raise_invalid_status(status: int):
+    from websockets.exceptions import InvalidStatus
+
+    async def fake_connect(*args, **kwargs):
+        raise InvalidStatus(_FakeResp(status))
+
+    return fake_connect
+
+
+def test_ws_connect_401_wraps_authentication_error(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "monkeycode.stream.websockets.connect", _raise_invalid_status(401)
+    )
+    with pytest.raises(AuthenticationError) as ei:
+        asyncio.run(_ws_connect("ws://x", {}))
+    assert ei.value.code == 401
+
+
+def test_ws_connect_400_wraps_api_error(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "monkeycode.stream.websockets.connect", _raise_invalid_status(400)
+    )
+    with pytest.raises(APIError) as ei:
+        asyncio.run(_ws_connect("ws://x", {}))
+    assert ei.value.code == 400
+    assert "400" in str(ei.value)
+
+
+def test_ws_connect_oserror_wraps_api_error(monkeypatch) -> None:
+    async def fake_connect(*args, **kwargs):
+        raise ConnectionRefusedError("refused")
+
+    monkeypatch.setattr("monkeycode.stream.websockets.connect", fake_connect)
+    with pytest.raises(APIError):
+        asyncio.run(_ws_connect("ws://x", {}))
+
+
+def test_ws_connect_success(monkeypatch) -> None:
+    async def fake_connect(*args, **kwargs):
+        return "ws-obj"
+
+    monkeypatch.setattr("monkeycode.stream.websockets.connect", fake_connect)
+    assert asyncio.run(_ws_connect("ws://x", {})) == "ws-obj"

@@ -14,6 +14,11 @@ from typing import Any
 
 import websockets
 
+from monkeycode.errors import (
+    APIError,
+    AuthenticationError,
+    RateLimitError,
+)
 from monkeycode.models import TaskStreamChunk, UserInputPayload
 
 
@@ -56,6 +61,57 @@ def _session_headers(client: Any) -> dict[str, str]:
     if cookies:
         return {"Cookie": "; ".join(cookies)}
     return {}
+
+
+def _wrap_ws_error(exc: Exception) -> Exception:
+    """把 WebSocket 连接异常包装为 SDK 统一异常。
+
+    服务端拒绝升级（任务不存在、会话失效、限流等）时，
+    websockets 会抛 InvalidStatus/InvalidStatusCode，这里提取
+    HTTP 状态码与响应体，转为 APIError 家族异常。
+    """
+    if isinstance(
+        exc,
+        (
+            getattr(websockets.exceptions, "InvalidStatus", ()),
+            getattr(websockets.exceptions, "InvalidStatusCode", ()),
+        ),
+    ):
+        resp = getattr(exc, "response", None)
+        status: int | None = None
+        body = ""
+        if resp is not None:
+            status = getattr(resp, "status_code", None)
+            body = getattr(resp, "body", "")
+            if isinstance(body, bytes):
+                body = body.decode("utf-8", errors="replace")
+        status = status or 0
+        body = str(body)[:200]
+        if status == 401:
+            return AuthenticationError(
+                "WebSocket 认证失败或会话已失效，请重新登录。", code=401
+            )
+        if status == 429:
+            return RateLimitError(
+                f"WebSocket 触发限流（HTTP 429）：{body}", code=429
+            )
+        return APIError(
+            f"WebSocket 连接失败（HTTP {status}）：{body}", code=status
+        )
+    if isinstance(exc, (OSError, ConnectionError)):
+        return APIError(f"WebSocket 连接失败：{exc}", code=0)
+    return exc
+
+
+async def _ws_connect(url: str, headers: dict[str, str]) -> Any:
+    """建立 WebSocket 连接，连接异常统一包装为 SDK 异常。"""
+    try:
+        return await websockets.connect(url, additional_headers=headers)
+    except Exception as exc:
+        wrapped = _wrap_ws_error(exc)
+        if wrapped is exc:
+            raise
+        raise wrapped from exc
 
 
 def encode_user_input(
@@ -123,8 +179,8 @@ class TaskStream:
 
     async def connect(self) -> None:
         """建立 WebSocket 连接（携带登录 Cookie）。"""
-        self._ws = await websockets.connect(
-            self._url(), additional_headers=_session_headers(self.client)
+        self._ws = await _ws_connect(
+            self._url(), _session_headers(self.client)
         )
 
     async def send_user_input(
@@ -203,8 +259,8 @@ class ControlStream:
 
     async def connect(self) -> None:
         """建立 WebSocket 连接（携带登录 Cookie）。"""
-        self._ws = await websockets.connect(
-            self._url(), additional_headers=_session_headers(self.client)
+        self._ws = await _ws_connect(
+            self._url(), _session_headers(self.client)
         )
 
     async def send_call(self, kind: str, data: dict[str, Any]) -> None:
@@ -275,8 +331,8 @@ class TerminalStream:
 
     async def connect(self) -> None:
         """建立 WebSocket 连接（携带登录 Cookie）。"""
-        self._ws = await websockets.connect(
-            self._url(), additional_headers=_session_headers(self.client)
+        self._ws = await _ws_connect(
+            self._url(), _session_headers(self.client)
         )
 
     async def send_data(self, data: bytes | str) -> None:
@@ -346,8 +402,8 @@ class JoinTerminalStream:
 
     async def connect(self) -> None:
         """建立 WebSocket 连接（携带登录 Cookie）。"""
-        self._ws = await websockets.connect(
-            self._url(), additional_headers=_session_headers(self.client)
+        self._ws = await _ws_connect(
+            self._url(), _session_headers(self.client)
         )
 
     async def send_data(self, data: bytes | str) -> None:

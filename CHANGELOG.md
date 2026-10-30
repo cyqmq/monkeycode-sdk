@@ -1,5 +1,11 @@
 # 更新日志
 
+## [1.7.2] - 2026-10-30
+
+### 改进
+- **WebSocket 连接异常统一包装**：`TaskStream` / `ControlStream` / `TerminalStream` / `JoinTerminalStream` 的 `connect()` 不再抛出原始 `websockets.exceptions.InvalidStatus`，而是包装为 SDK 统一异常（401 → `AuthenticationError`，429 → `RateLimitError`，其他 → `APIError` 带状态码与响应文本）
+- 新增 4 个连接异常包装单元测试（共 56 个）
+
 ## [1.7.1] - 2026-10-29
 
 ### 其他
