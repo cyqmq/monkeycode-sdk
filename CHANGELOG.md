@@ -1,5 +1,11 @@
 # 更新日志
 
+## [1.7.1] - 2026-10-29
+
+### 其他
+- `pyproject.toml` 改用 SPDX `license = "MIT"`（消除打包警告）
+- PyPI 发布改用 Trusted Publishing（OIDC）验证
+
 ## [1.7.0] - 2026-10-29
 
 ### 新增（工程化：测试 / CI / 架构文档）

@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monkeycode-sdk"
-version = "1.7.0"
+version = "1.7.1"
 description = "MonkeyCode 云平台 REST API 的 Python SDK（认证、任务提交、结果轮询）"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "cyqmq" }]
 keywords = ["monkeycode", "ai", "coding", "agent", "sdk"]
 classifiers = [
