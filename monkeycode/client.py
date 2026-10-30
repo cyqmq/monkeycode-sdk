@@ -846,6 +846,21 @@ class MonkeyCodeClient:
         resp = self._client.get("/api/v1/users/files/download", params=params)
         if resp.status_code != 200:
             raise APIError(f"下载失败（HTTP {resp.status_code}）：{resp.text[:200]}")
+        # 后端可能以 HTTP 200 返回业务错误 JSON（如开发环境已被回收），
+        # 此时不能把错误 JSON 当文件内容返回。
+        content_type = resp.headers.get("content-type", "")
+        if "application/json" in content_type:
+            try:
+                body = resp.json()
+            except ValueError:
+                body = None
+            if isinstance(body, dict) and body.get("code") not in (None, 0):
+                code = body.get("code")
+                message = body.get("message") or body.get("msg") or "未知错误"
+                message = _friendly_error(code, message)
+                raise APIError(
+                    f"{message}（code={code}）", code=code, raw=body
+                )
         return resp.content
 
     def move_file(self, vm_id: str, source: str, target: str) -> Any:

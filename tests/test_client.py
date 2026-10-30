@@ -174,3 +174,38 @@ def test_post_not_retried_on_network_error() -> None:
     with pytest.raises(APIError):
         client.logout()
     assert attempts["n"] == 1  # 只读才重试，POST 不重试
+
+
+# ---------- download_file 业务错误码解析 ----------
+
+def test_download_file_raises_on_business_error() -> None:
+    """后端 HTTP 200 + 业务错误 JSON 时应抛 APIError，而不是返回错误内容。"""
+    from monkeycode.errors import APIError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response(
+            {"code": 10231, "message": "开发环境已被回收"},
+            headers={"Content-Type": "application/json"},
+        )
+
+    client = make_client(handler)
+    with pytest.raises(APIError) as ei:
+        client.download_file("vm-1", "/root", "a.txt")
+    assert ei.value.code == 10231
+    assert "开发环境已被回收" in str(ei.value)
+
+
+def test_download_file_returns_bytes_on_success() -> None:
+    """正常下载应返回文件字节内容。"""
+    import io
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b"file-content",
+            headers={"Content-Type": "application/octet-stream"},
+            request=request,
+        )
+
+    client = make_client(handler)
+    assert client.download_file("vm-1", "/root", "a.txt") == b"file-content"
