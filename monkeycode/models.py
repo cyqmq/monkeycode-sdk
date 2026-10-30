@@ -6,6 +6,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+def _safe_int(value: Any) -> int | None:
+    """容错转换为 int；无效输入（非数字/异常格式）返回 None。"""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass
 class RepoReq:
     """任务仓库信息。"""
@@ -120,13 +130,11 @@ class Task:
 
     @property
     def created_at(self) -> int | None:
-        v = self.raw.get("created_at")
-        return int(v) if v is not None else None
+        return _safe_int(self.raw.get("created_at"))
 
     @property
     def completed_at(self) -> int | None:
-        v = self.raw.get("completed_at")
-        return int(v) if v is not None else None
+        return _safe_int(self.raw.get("completed_at"))
 
     @property
     def result(self) -> Any:
@@ -149,8 +157,7 @@ class TaskRound:
 
     @property
     def seq(self) -> int | None:
-        v = self.raw.get("seq")
-        return int(v) if v is not None else None
+        return _safe_int(self.raw.get("seq"))
 
     @property
     def role(self) -> str:

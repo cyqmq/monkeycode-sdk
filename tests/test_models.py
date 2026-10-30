@@ -94,3 +94,35 @@ def test_user_input_payload_encode() -> None:
     obj = json.loads(encoded)
     assert obj["attachments"] == [{"url": "u"}]
     assert base64.b64decode(obj["content"]).decode("utf-8") == "你好"
+
+
+def test_task_timestamps_tolerate_invalid() -> None:
+    """非数字时间戳应容错返回 None，而不是抛 ValueError。"""
+    raw = {
+        "id": "t1",
+        "status": "running",
+        "created_at": "not-a-number",
+        "completed_at": None,
+    }
+    task = Task.from_dict(raw)
+    assert task.created_at is None
+    assert task.completed_at is None
+
+
+def test_task_timestamps_valid() -> None:
+    raw = {
+        "id": "t1",
+        "status": "running",
+        "created_at": "123",
+        "completed_at": 456,
+    }
+    task = Task.from_dict(raw)
+    assert task.created_at == 123
+    assert task.completed_at == 456
+
+
+def test_task_round_seq_tolerates_invalid() -> None:
+    from monkeycode.models import TaskRound
+
+    assert TaskRound(raw={"seq": "abc"}).seq is None
+    assert TaskRound(raw={"seq": 7}).seq == 7
