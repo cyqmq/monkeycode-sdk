@@ -400,12 +400,16 @@ class MonkeyCodeClient:
         base_url: str,
         api_key: str,
         api_header: str | None = None,
+        model_id: str | None = None,
     ) -> Any:
         """列出模型供应商的模型列表。
 
         provider 取值：SiliconFlow / OpenAI / Ollama / DeepSeek /
         Moonshot / AzureOpenAI / BaiZhiCloud / Hunyuan / BaiLian /
         Volcengine / Gemini / Other。
+
+        服务端 /api/v1/users/models/providers 需要 model_id（模型配置 ID），
+        可在调用前先用 create_model 创建配置获取，或从 list_models 中取。
         """
         params: dict[str, Any] = {
             "provider": provider,
@@ -414,6 +418,8 @@ class MonkeyCodeClient:
         }
         if api_header:
             params["api_header"] = api_header
+        if model_id:
+            params["model_id"] = model_id
         return self._request(
             "GET", "/api/v1/users/models/providers", params=params
         )

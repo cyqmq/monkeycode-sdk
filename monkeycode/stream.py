@@ -169,6 +169,34 @@ def _try_b64(s: str) -> str | None:
         return None
 
 
+def _decode_b64_layers(s: str, max_layers: int = 2) -> str:
+    """递归解码多层 base64，直到不再是 base64 或达到层数上限。
+
+    user-input 的内容可能经过两层 base64 编码（外层 + 内层 content）。
+    """
+    text = s
+    for _ in range(max_layers):
+        decoded = _try_b64(text)
+        if decoded is None or decoded == text:
+            break
+        text = decoded
+    return text
+
+
+def _collapse_text(text: str, max_len: int) -> str:
+    """折叠多行文本为单行（去空行，用 ⏎ 分隔），并截断到 max_len。"""
+    if "\n" in text or "\r" in text:
+        lines = [
+            ln.strip()
+            for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        ]
+        lines = [ln for ln in lines if ln]
+        text = " ⏎ ".join(lines)
+    if len(text) > max_len:
+        text = text[:max_len].rstrip() + "…"
+    return text
+
+
 _SENSITIVE_RE = re.compile(
     r"api[_-]?key|apikey|access[_-]?key|secret|password|passwd|token"
     r"|authorization|cookie|env|credential|\bkey\b",
@@ -256,7 +284,12 @@ def format_round_text(data: Any, max_len: int = 400) -> str:
     obj = _coerce_round_payload(data)
     if not isinstance(obj, dict):
         text = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False)
-        return text[:max_len]
+        # 字符串可能是第二层 base64 编码的文本，再解一层
+        if isinstance(obj, str):
+            decoded = _decode_b64_layers(obj)
+            if decoded != obj:
+                text = decoded
+        return _collapse_text(text, max_len)
 
     if str(obj.get("type") or "") == "user-input" and "content" not in obj:
         inner_data = obj.get("data")
@@ -265,9 +298,9 @@ def format_round_text(data: Any, max_len: int = 400) -> str:
 
     content = obj.get("content")
     if isinstance(content, str):
-        inner = _try_b64(content)
-        if inner is not None and inner != content:
-            return inner[:max_len]
+        inner = _decode_b64_layers(content)
+        if inner != content:
+            return _collapse_text(inner, max_len)
 
     update = obj.get("update") if isinstance(obj.get("update"), dict) else {}
     session_update = str(
@@ -283,7 +316,7 @@ def format_round_text(data: Any, max_len: int = 400) -> str:
                 if isinstance(c, dict) and c.get("name")
             ][:10]
             if names:
-                return "、".join(names)[:max_len]
+                return _collapse_text("、".join(names), max_len)
             return f"共 {len(cmds)} 项"
         if session_update in ("agent_message", "agent_message_chunk"):
             msg = (
@@ -292,12 +325,12 @@ def format_round_text(data: Any, max_len: int = 400) -> str:
                 or _extract_text_field(update.get("message"))
                 or _extract_text_field(update.get("content"))
             )
-            return msg[:max_len]
+            return _collapse_text(msg, max_len)
         if session_update == "agent_thought_chunk":
             thought = _extract_text_field(src.get("thought"))
             if not thought:
                 thought = _extract_text_field(src.get("content"))
-            return thought[:max_len] if thought else "（思考中）"
+            return _collapse_text(thought, max_len) if thought else "（思考中）"
         if session_update == "usage_update":
             usage = src.get("usage") or update.get("usage") or {}
             if isinstance(usage, dict):
@@ -320,17 +353,22 @@ def format_round_text(data: Any, max_len: int = 400) -> str:
             if title:
                 return f"{title} {status}".strip()[:max_len]
             safe = _redact_sensitive(src)
-            return json.dumps(safe, ensure_ascii=False)[:max_len]
-        return (
+            return _collapse_text(
+                json.dumps(safe, ensure_ascii=False), max_len
+            )
+        return _collapse_text(
             f"{session_update} "
-            f"{json.dumps(_redact_sensitive(src), ensure_ascii=False)[:300]}"
+            f"{json.dumps(_redact_sensitive(src), ensure_ascii=False)[:300]}",
+            max_len,
         )
 
     for key in ("content", "message", "text"):
         extracted = _extract_text_field(obj.get(key))
         if extracted:
-            return extracted[:max_len]
-    return json.dumps(_redact_sensitive(obj), ensure_ascii=False)[:max_len]
+            return _collapse_text(extracted, max_len)
+    return _collapse_text(
+        json.dumps(_redact_sensitive(obj), ensure_ascii=False), max_len
+    )
 
 
 def _round_session_update(data: Any) -> str:

@@ -1,5 +1,15 @@
 # 更新日志
 
+## [1.15.0] - 2026-10-31
+
+### 修复
+- **list-model-providers 接口契约**：服务端 `/api/v1/users/models/providers` 要求 `model_id`（模型配置 ID），SDK 此前未传导致「模型ID必填（code=10300）」；现新增可选 `model_id` 参数，CLI 缺省时自动从已有模型配置中匹配同 provider 的一个，并支持 `--model-id` 显式指定
+- **rounds 用户输入泄露**：`format_round_text` 对裸字符串（无 JSON 包裹）的第二层 base64 再解码，`_decode_b64_layers` 逐层解码；多行原始日志折叠为单行（空行去除，`⏎` 分隔），不再刷屏
+- **rounds 刷屏（默认上限）**：`--chunks` 默认值改为 200（`0` 为不限），默认 `--limit 5` 不再输出上千行
+
+### 改进
+- `_collapse_text`：多行文本折叠为单行并截断（超长加 `…`）
+
 ## [1.14.0] - 2026-10-31
 
 ### 修复

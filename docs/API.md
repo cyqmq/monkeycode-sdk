@@ -90,7 +90,7 @@
 | `list_issue_comments(self, project_id: str, issue_id: str, cursor: str | None=None, limit: int | None=None)` | 获取 Issue 评论列表 |
 | `list_mcp_upstreams(self)` | 获取 MCP 上游列表 |
 | `list_members(self)` | 获取团队成员列表 |
-| `list_model_providers(self, provider: str, base_url: str, api_key: str, api_header: str | None=None)` | 列出模型供应商的模型列表 |
+| `list_model_providers(self, provider: str, base_url: str, api_key: str, api_header: str | None=None, model_id: str | None=None)` | 列出模型供应商的模型列表（model_id 可选，服务端要求时提供） |
 | `list_models(self)` | 获取可用的模型列表（返回 data.models） |
 | `list_notify_channels(self)` | 获取通知渠道列表 |
 | `list_notify_event_types(self)` | 获取通知事件类型 |

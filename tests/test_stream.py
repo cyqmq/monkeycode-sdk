@@ -92,6 +92,39 @@ def test_format_round_text_multiline_base64() -> None:
     assert format_round_text(payload) == "继续"
 
 
+def test_decode_b64_layers_double() -> None:
+    """多层 base64 应逐层解码。"""
+    from monkeycode.stream import _decode_b64_layers
+
+    once = base64.b64encode("继续".encode()).decode()
+    twice = base64.b64encode(once.encode()).decode()
+    assert _decode_b64_layers(twice) == "继续"
+
+
+def test_collapse_text_multiline() -> None:
+    """多行文本应折叠为单行，且空行被去除。"""
+    from monkeycode.stream import _collapse_text
+
+    text = "第一行\n\n第二行\n第三行"
+    assert _collapse_text(text, 400) == "第一行 ⏎ 第二行 ⏎ 第三行"
+
+
+def test_collapse_text_truncates() -> None:
+    from monkeycode.stream import _collapse_text
+
+    text = "a" * 500
+    out = _collapse_text(text, 200)
+    assert len(out) == 201  # 200 + 省略号
+    assert out.endswith("…")
+
+
+def test_format_round_text_raw_double_b64() -> None:
+    """data 为双层 base64 的裸字符串（无 JSON 包裹）应解码后折叠。"""
+    once = base64.b64encode("line1\nline2".encode()).decode()
+    twice = base64.b64encode(once.encode()).decode()
+    assert format_round_text(twice) == "line1 ⏎ line2"
+
+
 def test_format_round_text_available_commands_update() -> None:
     payload = {
         "sessionId": "ses_e783",

@@ -44,8 +44,10 @@ python3 cli.py list-hosts          # 列出云端环境
 python3 cli.py list-images         # 列出镜像
 python3 cli.py list-models         # 列出模型（按我的/基础/专业/旗舰分组）
 python3 cli.py list-available-models   # 列出可用模型
-python3 cli.py list-model-providers <provider> <base_url> <api_key> [--api-header xxx]
-                                      # 列出模型供应商的模型列表（provider/base_url/api_key 必填）
+python3 cli.py list-model-providers <provider> <base_url> <api_key> [--api-header xxx] [--model-id xxx]
+                                      # 列出模型供应商的模型列表（provider/base_url/api_key 必填；
+                                      # model_id 服务端要求，缺省时自动匹配已有同 provider 模型）
+python3 cli.py rounds <task_id> [--limit 5] [--chunks 200]  # 查看轮次（默认截断到 200 条 chunk）
 python3 cli.py vms                 # 列出各宿主下的虚拟机
 python3 cli.py terminal <vm_id>    # 列出虚拟机终端会话
 python3 cli.py list-projects       # 列出项目（仓库）
