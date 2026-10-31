@@ -1,5 +1,11 @@
 # 更新日志
 
+## [1.10.0] - 2026-10-31
+
+### 新增
+- `group_models(models)`：按页面分类本地分组模型列表（我的模型 `owner.type=private` / 基础 `access_level=basic` / 专业 `pro` / 旗舰 `ultra` / 付费 `is_free=false`），无需单独分类接口
+- CLI `list-models` 增强：按分类分组输出模型（含付费标记）
+
 ## [1.9.0] - 2026-10-31
 
 ### 新增

@@ -126,3 +126,30 @@ def test_task_round_seq_tolerates_invalid() -> None:
 
     assert TaskRound(raw={"seq": "abc"}).seq is None
     assert TaskRound(raw={"seq": 7}).seq == 7
+
+
+def test_group_models_partitions() -> None:
+    from monkeycode.models import group_models
+
+    models = [
+        {"id": "m1", "access_level": "basic", "is_free": True,
+         "owner": {"type": "organization"}},
+        {"id": "m2", "access_level": "pro", "is_free": False,
+         "owner": {"type": "organization"}},
+        {"id": "m3", "access_level": "ultra", "is_free": False,
+         "owner": {"type": "organization"}},
+        {"id": "m4", "access_level": "basic", "is_free": False,
+         "owner": {"type": "private"}},
+        {"id": "m5", "access_level": "pro", "is_free": True,
+         "owner": {"type": "user"}},
+        {"id": "m6", "access_level": "", "is_free": True,
+         "owner": {"type": "user"}},
+    ]
+    g = group_models(models)
+    assert [m["id"] for m in g["private"]] == ["m4"]
+    assert [m["id"] for m in g["basic"]] == ["m1"]
+    assert [m["id"] for m in g["pro"]] == ["m2", "m5"]
+    assert [m["id"] for m in g["ultra"]] == ["m3"]
+    assert [m["id"] for m in g["other"]] == ["m6"]
+    # paid 是交叉筛选：is_free == false 的模型
+    assert [m["id"] for m in g["paid"]] == ["m2", "m3", "m4"]

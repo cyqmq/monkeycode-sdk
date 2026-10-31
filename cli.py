@@ -26,7 +26,7 @@ from monkeycode import (
     MonkeyCodeClient,
     TaskError,
 )
-from monkeycode.models import RepoReq
+from monkeycode.models import RepoReq, group_models
 from monkeycode.stream import (
     format_round_text,
     round_kind,
@@ -256,6 +256,34 @@ def cmd_api_key_delete(client: MonkeyCodeClient, key_id: str) -> None:
     print_json(client.delete_api_key(key_id))
 
 
+def cmd_list_models(client: MonkeyCodeClient) -> None:
+    """列出模型并按页面分类分组显示。"""
+    models = client.list_models()
+    if not models:
+        print("暂无模型。")
+        return
+    groups = group_models(models)
+    group_labels = (
+        ("private", "我的模型"),
+        ("basic", "基础模型"),
+        ("pro", "专业模型"),
+        ("ultra", "旗舰模型"),
+        ("other", "其他"),
+    )
+    for key, label in group_labels:
+        items = groups.get(key) or []
+        if not items:
+            continue
+        print(f"【{label}】{len(items)} 个")
+        for m in items:
+            name = m.get("model") or m.get("name") or m.get("id") or ""
+            paid = "" if m.get("is_free") else " [付费]"
+            print(f"  · {name}{paid}")
+    paid = groups.get("paid") or []
+    if paid:
+        print(f"【付费模型】{len(paid)} 个（is_free=false）")
+
+
 def cmd_list_available_models(client: MonkeyCodeClient) -> None:
     """列出可用模型。"""
     print_json(client.list_available_models())
@@ -395,7 +423,7 @@ def main() -> None:
         elif args.command == "list-images":
             print_json(client.list_images())
         elif args.command == "list-models":
-            print_json(client.list_models())
+            cmd_list_models(client)
         elif args.command == "list-available-models":
             cmd_list_available_models(client)
         elif args.command == "list-model-providers":

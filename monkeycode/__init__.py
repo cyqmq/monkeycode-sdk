@@ -22,6 +22,7 @@ from monkeycode.models import (
     TaskStreamChunk,
     UserInputPayload,
     VMResource,
+    group_models,
 )
 from monkeycode.session import AgentSession
 from monkeycode.stream import (
@@ -34,7 +35,7 @@ from monkeycode.stream import (
     round_label,
 )
 
-__version__ = "1.9.0"
+__version__ = "1.10.0"
 
 __all__ = [
     "MonkeyCodeClient",
@@ -61,4 +62,5 @@ __all__ = [
     "format_round_text",
     "round_kind",
     "round_label",
+    "group_models",
 ]

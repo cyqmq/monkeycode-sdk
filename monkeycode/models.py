@@ -16,6 +16,45 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def group_models(models: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """按页面分类对模型列表本地分组（无单独分类接口）。
+
+    互斥分组（owner.type=private 优先）：
+    - private：我的模型（owner.type == "private"）
+    - basic：基础模型（access_level == "basic"）
+    - pro：专业模型（access_level == "pro"）
+    - ultra：旗舰模型（access_level == "ultra"）
+    - other：其他
+    - paid：付费模型（is_free == false，交叉筛选，可能与上述分组重叠）
+    """
+    groups: dict[str, list[dict[str, Any]]] = {
+        "private": [],
+        "basic": [],
+        "pro": [],
+        "ultra": [],
+        "other": [],
+    }
+    paid: list[dict[str, Any]] = []
+    for m in models or []:
+        owner = m.get("owner") if isinstance(m.get("owner"), dict) else {}
+        owner_type = str(owner.get("type") or "").lower()
+        access_level = str(m.get("access_level") or "").lower()
+        if owner_type == "private":
+            groups["private"].append(m)
+        elif access_level == "basic":
+            groups["basic"].append(m)
+        elif access_level == "pro":
+            groups["pro"].append(m)
+        elif access_level == "ultra":
+            groups["ultra"].append(m)
+        else:
+            groups["other"].append(m)
+        if not m.get("is_free"):
+            paid.append(m)
+    groups["paid"] = paid
+    return groups
+
+
 @dataclass
 class RepoReq:
     """任务仓库信息。"""
