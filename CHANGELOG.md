@@ -1,5 +1,17 @@
 # 更新日志
 
+## [1.14.0] - 2026-10-31
+
+### 修复
+- **list-model-providers 连错服务器**：位置参数 `base_url` 与全局 `--base-url` 同名导致 argparse 覆盖，客户端被构建到供应商地址（如 api.deepseek.com）而鉴权失败；已重命名为 `provider_base_url`
+- **wallet-tx 方向仍错**：`kind` 为 `mcp_tool_consumption` 时未匹配支出模式；现按子串宽匹配（`consumption`/`consume`/`expense`），`checkin` 归收入、消费类归支出
+- **api-key delete 输出 null**：DELETE 返回 null 时改为打印「已删除 API Key：<id>」
+- **send-msg 静默挂起**：任务已结束时 `read_timeout` 触发 `asyncio.TimeoutError`，CLI 捕获并提示「任务可能已结束或无响应」，不再 traceback
+- **rounds 刷屏**：服务端把 `limit` 当「轮次数」，`--limit 20` 实测约 2400 chunk；新增 `--chunks` 限制打印条数，并把默认轮次数从 20 降到 5
+
+### 改进
+- `cmd_checkin` 人类可读：`{"checked_in": true}` 显示「签到成功！」，已签则显示「今日已签到」
+
 ## [1.13.1] - 2026-10-31
 
 ### 修复

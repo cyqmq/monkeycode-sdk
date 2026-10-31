@@ -345,27 +345,30 @@ def _print_rounds(chunks: list[dict], color: bool) -> None:
 def cmd_rounds(
     client: MonkeyCodeClient,
     task_id: str,
-    limit: int = 20,
+    limit: int = 5,
     all_rounds: bool = False,
     turn: int | None = None,
+    chunks: int | None = None,
     color: bool = False,
 ) -> None:
     """打印任务轮次：按 turn 折叠，支持 --all / --turn / --color。"""
-    chunks = _fetch_rounds(client, task_id, limit, all_rounds)
-    chunks = sorted(
-        chunks,
+    chunk_list = _fetch_rounds(client, task_id, limit, all_rounds)
+    chunk_list = sorted(
+        chunk_list,
         key=lambda c: (
             int(c.get("turn_seq") or 0),
             int(c.get("timestamp") or 0),
         ),
     )
     if turn is not None:
-        chunks = [c for c in chunks if int(c.get("turn_seq") or 0) == turn]
-    chunks = _dedupe_tool_calls(chunks)
-    if not chunks:
+        chunk_list = [c for c in chunk_list if int(c.get("turn_seq") or 0) == turn]
+    if chunks is not None and len(chunk_list) > chunks:
+        chunk_list = chunk_list[-chunks:]
+    chunk_list = _dedupe_tool_calls(chunk_list)
+    if not chunk_list:
         print("暂无轮次记录。")
         return
-    _print_rounds(chunks, color)
+    _print_rounds(chunk_list, color)
 
 
 def cmd_task_stop(client: MonkeyCodeClient, task_id: str) -> None:
@@ -380,7 +383,14 @@ def cmd_task_delete(client: MonkeyCodeClient, task_id: str) -> None:
 
 def cmd_send_msg(client: MonkeyCodeClient, task_id: str, content: str) -> None:
     """向运行中的任务发送消息。"""
-    events = asyncio.run(client.send_task_message(task_id, content))
+    try:
+        events = asyncio.run(client.send_task_message(task_id, content))
+    except (asyncio.TimeoutError, TimeoutError):
+        print("任务可能已结束或无响应，未收到事件流。请先用 rounds 确认任务状态。")
+        return
+    except Exception as e:
+        print(f"发送消息失败：{e}")
+        return
     for e in events:
         event = getattr(e, "type", "unknown")
         label = round_label(e.data, event)
@@ -412,7 +422,22 @@ def cmd_wallet(client: MonkeyCodeClient) -> None:
 
 def cmd_checkin(client: MonkeyCodeClient) -> None:
     """每日签到（自动求解 PoW）。"""
-    print_json(client.checkin())
+    data = client.checkin()
+    if isinstance(data, dict):
+        checked_in = data.get("checked_in")
+        if checked_in:
+            print("签到成功！")
+        else:
+            print("今日已签到，无需重复签到。")
+        extra = {
+            k: v
+            for k, v in data.items()
+            if k not in ("checked_in", "success", "message", "msg")
+        }
+        if extra:
+            print_json(extra)
+    else:
+        print_json(data)
 
 
 def cmd_wallet_tx(client: MonkeyCodeClient) -> None:
@@ -441,9 +466,18 @@ def cmd_wallet_tx(client: MonkeyCodeClient) -> None:
             or tx.get("direction")
             or ""
         ).lower()
-        if inout in ("in", "income", "recharge", "add", "checkin"):
+        if (
+            inout in ("in", "income", "recharge", "add", "checkin")
+            or "recharge" in inout
+            or "income" in inout
+        ):
             sign, io = "+", "收入"
-        elif inout in ("out", "expense", "consume", "subtract", "checkin_reward"):
+        elif (
+            inout in ("out", "expense", "subtract", "checkin_reward")
+            or "consumption" in inout
+            or "consume" in inout
+            or "expense" in inout
+        ):
             sign, io = "-", "支出"
         else:
             sign, io = "", (inout or "-")
@@ -541,7 +575,11 @@ def cmd_api_key_create(client: MonkeyCodeClient) -> None:
 
 def cmd_api_key_delete(client: MonkeyCodeClient, key_id: str) -> None:
     """删除 API Key。"""
-    print_json(client.delete_api_key(key_id))
+    result = client.delete_api_key(key_id)
+    if result is None or result == {}:
+        print(f"已删除 API Key：{key_id}")
+    else:
+        print_json(result)
 
 
 def cmd_list_hosts(client: MonkeyCodeClient) -> None:
@@ -698,7 +736,7 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
             cmd_list_model_providers(
                 client,
                 args.provider,
-                args.base_url,
+                args.provider_base_url,
                 args.api_key,
                 args.api_header,
             )
@@ -730,6 +768,7 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
                 args.limit,
                 args.all,
                 args.turn,
+                args.chunks,
                 args.color,
             )
         elif args.command == "task-stop":
@@ -781,7 +820,7 @@ def main() -> None:
     sub.add_parser("list-available-models", help="列出可用模型")
     lm_p = sub.add_parser("list-model-providers", help="列出模型供应商的模型列表")
     lm_p.add_argument("provider", help="供应商：SiliconFlow/OpenAI/Ollama/DeepSeek 等")
-    lm_p.add_argument("base_url", help="Base URL")
+    lm_p.add_argument("provider_base_url", help="供应商 Base URL（如 https://api.deepseek.com）")
     lm_p.add_argument("api_key", help="API Key")
     lm_p.add_argument("--api-header", default=None, help="API 请求头")
     tasks_p = sub.add_parser("list-tasks", help="列出最近任务（含时间）")
@@ -811,7 +850,8 @@ def main() -> None:
 
     rounds_p = sub.add_parser("rounds", help="查看任务执行轮次（按 turn 折叠打印）")
     rounds_p.add_argument("task_id", help="任务 ID")
-    rounds_p.add_argument("--limit", type=int, default=20, help="拉取条数，默认 20")
+    rounds_p.add_argument("--limit", type=int, default=5, help="拉取轮次数，默认 5")
+    rounds_p.add_argument("--chunks", type=int, default=None, help="最多显示 chunk 条数（防止刷屏）")
     rounds_p.add_argument("--all", action="store_true", help="分页拉取全部轮次")
     rounds_p.add_argument("--turn", type=int, default=None, help="只显示指定 turn")
     rounds_p.add_argument("--color", action="store_true", help="用 ANSI 颜色区分事件类型")
