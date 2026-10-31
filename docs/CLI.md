@@ -25,12 +25,12 @@ python3 cli.py logout                      # 退出当前会话
 
 ```bash
 python3 cli.py run "写一个 hello world"        # 创建任务并轮询结果
-python3 cli.py list-tasks                      # 列出最近任务
+python3 cli.py list-tasks [--limit N] [--full]   # 列出最近任务（含时间；--full 显示完整内容）
 python3 cli.py task-info <task_id>             # 查看任务详情
 python3 cli.py task-stop <task_id>             # 停止任务
 python3 cli.py task-delete <task_id>           # 删除任务
 python3 cli.py send-msg <task_id> "继续"       # 向运行中的任务发送消息
-python3 cli.py links <task_id>                 # 列出任务预览链接及存活状态
+python3 cli.py links <task_id>                 # 列出任务预览链接及存活状态（仅平台预览域名）
 python3 cli.py switch-model <task_id> <model_id>  # 切换运行中任务的模型
 python3 cli.py restart <task_id>               # 重启任务
 python3 cli.py rounds <task_id> [--limit 20] [--all] [--turn N] [--color]

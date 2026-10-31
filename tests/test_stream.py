@@ -232,6 +232,21 @@ def test_round_kind_and_label_classify() -> None:
     assert round_label(plain, "some-event") == "some-event"
 
 
+def test_redact_sensitive_public_alias() -> None:
+    from monkeycode.stream import redact_sensitive
+
+    obj = {
+        "execution_config": {"envs": {"OPENAI_API_KEY": "sk-123"}},
+        "name": "ok",
+        "nested": {"password": "p", "keep": 1},
+    }
+    out = redact_sensitive(obj)
+    assert out["execution_config"]["envs"] == {"***": "***"}
+    assert out["nested"]["password"] == "***"
+    assert out["nested"]["keep"] == 1
+    assert out["name"] == "ok"
+
+
 # ---------- 连接异常包装 ----------
 
 class _FakeResp:

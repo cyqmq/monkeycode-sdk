@@ -31,12 +31,13 @@ from monkeycode.stream import (
     TaskStream,
     TerminalStream,
     format_round_text,
+    redact_sensitive,
     round_kind,
     round_label,
     round_tool_title,
 )
 
-__version__ = "1.11.0"
+__version__ = "1.12.0"
 
 __all__ = [
     "MonkeyCodeClient",
@@ -61,6 +62,7 @@ __all__ = [
     "JoinTerminalStream",
     "AgentSession",
     "format_round_text",
+    "redact_sensitive",
     "round_kind",
     "round_label",
     "round_tool_title",

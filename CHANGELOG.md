@@ -1,5 +1,26 @@
 # 更新日志
 
+## [1.12.0] - 2026-10-31
+
+### 新增
+- `redact_sensitive()`：递归脱敏公共函数（api_key/token/secret/password/env 等字段打码为 `***`）
+- `list_git_identities()` 返回前自动对 `access_token` 等敏感字段打码
+
+### 修复
+- `list_playground_posts()` / `get_license_status()` 遇到 `{'message': 'Not Found'}` 时抛出 `APIError`，不再静默返回
+- CLI 所有命令统一捕获异常打印友好错误，不再直接 Traceback（假任务 ID、接口异常等）
+
+### 改进（CLI 输出风格统一）
+- `list-hosts`：状态 / 核心 / 内存 / 自建·公共（复用后台宿主摘要逻辑）
+- `list-images`：名称 + ID + 默认标记 + 说明
+- `list-available-models`：按分类分组输出（同 list-models 风格），并显示总数
+- `list-tasks`：支持 `--limit N` 与 `--full`，显示中文状态与创建时间
+- `list-projects`：空列表提示「暂无项目」，显示仓库名 + ID + URL
+- `wallet-tx`：收支方向中文化（收入/支出）、金额换算为「点」、时间戳格式化
+- `links`：只保留 MonkeyCode 预览域名，可访问/异常分组展示，过滤 localhost 与无关链接
+- `terminal`：会话列表格式化输出（终端 ID / 状态 / 共享模式 / 创建时间）
+- `list-model-providers`：非 JSON 响应容错展示，模型列表精简输出
+
 ## [1.11.0] - 2026-10-31
 
 ### 新增

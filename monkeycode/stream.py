@@ -198,6 +198,9 @@ def _redact_sensitive(value: Any) -> Any:
     return value
 
 
+redact_sensitive = _redact_sensitive
+
+
 def _coerce_round_payload(data: Any) -> Any:
     """把 rounds chunk 的 data 规范成 dict/str。"""
     if data is None:

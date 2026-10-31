@@ -40,6 +40,7 @@ from monkeycode.stream import (
     JoinTerminalStream,
     TaskStream,
     TerminalStream,
+    redact_sensitive,
 )
 
 DEFAULT_BASE_URL = "https://monkeycode-ai.com"
@@ -706,8 +707,9 @@ class MonkeyCodeClient:
     # ---------- Git 身份 / Git Bots ----------
 
     def list_git_identities(self) -> Any:
-        """获取 Git 身份列表。"""
-        return self._request("GET", "/api/v1/users/git-identities")
+        """获取 Git 身份列表（access_token 已打码为 ***）。"""
+        data = self._request("GET", "/api/v1/users/git-identities")
+        return redact_sensitive(data)
 
     def list_git_branches(
         self,
@@ -1164,7 +1166,9 @@ class MonkeyCodeClient:
 
     def list_playground_posts(self) -> Any:
         """获取社区帖子列表。"""
-        return self._request("GET", "/api/v1/playground-posts")
+        return self._raise_on_not_found(
+            self._request("GET", "/api/v1/playground-posts")
+        )
 
     def create_playground_post(self, content: str) -> Any:
         """发布普通社区帖子。"""
@@ -1176,7 +1180,9 @@ class MonkeyCodeClient:
 
     def get_license_status(self) -> Any:
         """获取 License 状态。"""
-        return self._request("GET", "/api/v1/license/status")
+        return self._raise_on_not_found(
+            self._request("GET", "/api/v1/license/status")
+        )
 
     def get_license_machine_code(self) -> Any:
         """获取机器码。"""
@@ -2048,6 +2054,23 @@ class MonkeyCodeClient:
         return self._request("DELETE", f"/api/v1/users/ohmyagent/api-keys/{key_id}")
 
     # ---------- 内部请求 ----------
+
+    def _raise_on_not_found(self, data: Any) -> Any:
+        """把仅含错误 message 的响应（如 {'message': 'Not Found'}）转为 APIError。"""
+        if isinstance(data, dict) and set(data.keys()) == {"message"}:
+            msg = str(data.get("message") or "").strip()
+            low = msg.lower()
+            if msg and (
+                "not found" in low
+                or "404" in low
+                or "不存在" in low
+                or "forbidden" in low
+                or "unauthorized" in low
+                or "error" in low
+                or "失败" in low
+            ):
+                raise APIError(msg, code=0, raw=data)
+        return data
 
     def _request(
         self,

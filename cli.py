@@ -19,9 +19,11 @@ import asyncio
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from monkeycode import (
+    APIError,
     AuthenticationError,
     MonkeyCodeClient,
     TaskError,
@@ -59,6 +61,78 @@ def get_credentials(session_path: str | None = None) -> tuple[str, str]:
 
 def print_json(obj) -> None:
     print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
+
+
+def _fmt_ts(ts) -> str:
+    """时间戳（秒）转为本地可读时间。"""
+    if not ts:
+        return "-"
+    try:
+        t = int(ts)
+    except (TypeError, ValueError):
+        return str(ts)
+    if t <= 0:
+        return "-"
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t))
+
+
+def _status_zh(status: str) -> str:
+    return {
+        "pending": "排队中",
+        "processing": "处理中",
+        "running": "运行中",
+        "completed": "已完成",
+        "success": "成功",
+        "error": "失败",
+        "failed": "失败",
+        "stopped": "已停止",
+        "deleted": "已删除",
+    }.get(str(status or "").lower(), str(status or ""))
+
+
+def _fmt_mem(mem) -> str:
+    if mem is None or mem == "":
+        return ""
+    try:
+        n = float(mem)
+    except (TypeError, ValueError):
+        return str(mem)
+    if n <= 0:
+        return str(mem)
+    gb = 1 << 30
+    mb = 1 << 20
+    if n >= gb:
+        return f"{n / gb:.1f} GB"
+    if n >= mb:
+        return f"{n / mb:.0f} MB"
+    return str(mem)
+
+
+def _host_line(h: dict) -> str:
+    hid = str(h.get("id") or "")
+    name = str(h.get("name") or h.get("hostname") or hid)
+    status = _status_zh(h.get("status") or "")
+    cpu = h.get("cpu") or h.get("cpu_core") or h.get("cores") or ""
+    mem = h.get("memory") or h.get("memory_size") or h.get("mem") or ""
+    specs: list[str] = []
+    if cpu:
+        specs.append(f"{cpu} 核")
+    mem_txt = _fmt_mem(mem)
+    if mem_txt:
+        specs.append(mem_txt)
+    is_public = bool(
+        h.get("is_public")
+        or h.get("is_shared")
+        or str(h.get("type") or "").lower() == "public"
+    )
+    parts = [f"{name} ({hid})", status]
+    if specs:
+        parts.append(" / ".join(specs))
+    remark = h.get("remark") or h.get("description") or ""
+    if remark:
+        parts.append(str(remark)[:40])
+    parts.append("公共" if is_public else "自建")
+    return " | ".join(parts)
 
 
 def interactive_login(client: MonkeyCodeClient) -> None:
@@ -104,16 +178,31 @@ def cmd_run(client: MonkeyCodeClient, content: str) -> None:
 
 
 def cmd_links(client: MonkeyCodeClient, task_id: str) -> None:
-    """列出任务中的预览链接并检测存活状态。"""
+    """列出任务中的 MonkeyCode 预览链接并检测存活状态。"""
     links = client.list_task_links(task_id, check_alive=True)
     if not links:
         print("未在任务轮次中发现预览链接。")
         return
-    for item in links:
-        status = item["status"] or "未检测"
-        code = item["http_code"]
-        code_str = f" HTTP {code}" if code else ""
-        print(f"{status}{code_str}  {item['url']}  (x{item['count']})")
+    # 只保留平台预览域名，过滤 localhost / 内网 / 占位符
+    preview = [x for x in links if "monkeycode-ai.online" in (x.get("url") or "")]
+    if not preview:
+        print("任务中未发现 MonkeyCode 预览域名链接。")
+        return
+    ok = [x for x in preview if x.get("status") == "在线"]
+    bad = [x for x in preview if x.get("status") != "在线"]
+    if ok:
+        print("可访问：")
+        for item in ok:
+            code = item.get("http_code")
+            code_str = f" HTTP {code}" if code else ""
+            print(f"  ✅ {code_str}  {item['url']}  (x{item.get('count')})")
+    if bad:
+        print("异常：")
+        for item in bad:
+            status = item.get("status") or "未检测"
+            code = item.get("http_code")
+            code_str = f" HTTP {code}" if code else ""
+            print(f"  ❌ {status}{code_str}  {item['url']}  (x{item.get('count')})")
 
 
 def cmd_whoami(client: MonkeyCodeClient) -> None:
@@ -127,15 +216,21 @@ def cmd_logout(client: MonkeyCodeClient) -> None:
     print("已退出登录")
 
 
-def cmd_list_tasks(client: MonkeyCodeClient) -> None:
-    """列出最近任务。"""
-    data = client.list_tasks(size=10)
-    tasks = data.get("tasks") if isinstance(data, dict) else data
+def cmd_list_tasks(client: MonkeyCodeClient, limit: int = 10, full: bool = False) -> None:
+    """列出最近任务（含时间，可选完整内容）。"""
+    data = client.list_tasks(size=limit)
+    tasks = data.get("tasks") if isinstance(data, dict) else (data or [])
+    if not tasks:
+        print("暂无任务。")
+        return
     for t in tasks or []:
-        status = t.get("status") or ""
+        status = _status_zh(t.get("status") or "")
         tid = t.get("id") or ""
-        content = (t.get("content") or "")[:60]
-        print(f"{tid}  {status:<12}  {content}")
+        content = str(t.get("content") or t.get("title") or "")
+        if not full:
+            content = content[:80]
+        created = _fmt_ts(t.get("created_at"))
+        print(f"[{status}] {created}  {tid}  {content}")
 
 
 def cmd_task_info(client: MonkeyCodeClient, task_id: str) -> None:
@@ -293,13 +388,59 @@ def cmd_checkin(client: MonkeyCodeClient) -> None:
 
 
 def cmd_wallet_tx(client: MonkeyCodeClient) -> None:
-    """查看钱包交易记录。"""
-    print_json(client.get_wallet_transactions())
+    """查看钱包交易记录（收支方向 + 时间格式化）。"""
+    data = client.get_wallet_transactions()
+    txs = (
+        data.get("list")
+        or data.get("transactions")
+        or data.get("items")
+        or (data if isinstance(data, list) else [])
+    )
+    if not txs:
+        print("暂无交易记录。")
+        return
+    for tx in txs or []:
+        try:
+            amount = int(tx.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = tx.get("amount") or 0
+        points = amount / 1000 if isinstance(amount, int) else amount
+        inout = str(
+            tx.get("inout_type") or tx.get("type") or tx.get("direction") or ""
+        ).lower()
+        if inout in ("in", "income", "recharge", "add", "checkin"):
+            sign, io = "+", "收入"
+        elif inout in ("out", "expense", "consume", "subtract"):
+            sign, io = "-", "支出"
+        else:
+            sign, io = "", (inout or "-")
+        remark = str(
+            tx.get("remark") or tx.get("description") or tx.get("kind") or ""
+        )[:40]
+        created = _fmt_ts(tx.get("created_at") or tx.get("time"))
+        print(f"[{io}] {sign}{points} 点  {created}  {remark}")
 
 
 def cmd_list_projects(client: MonkeyCodeClient) -> None:
     """列出项目（仓库）。"""
-    print_json(client.list_projects())
+    projects = client.list_projects()
+    if not projects:
+        print("暂无项目。")
+        return
+    for p in projects or []:
+        name = (
+            p.get("name")
+            or p.get("repo_name")
+            or p.get("full_name")
+            or p.get("id")
+            or ""
+        )
+        pid = p.get("id") or ""
+        url = p.get("repo_url") or p.get("url") or ""
+        line = f"{name} ({pid})"
+        if url:
+            line += f"  {url}"
+        print(line)
 
 
 def cmd_options(client: MonkeyCodeClient) -> None:
@@ -327,7 +468,28 @@ def cmd_vms(client: MonkeyCodeClient) -> None:
 
 def cmd_terminal(client: MonkeyCodeClient, vm_id: str) -> None:
     """列出虚拟机终端会话。"""
-    print_json(client.list_terminal_sessions(vm_id))
+    sessions = client.list_terminal_sessions(vm_id)
+    if not sessions:
+        print("暂无终端会话。")
+        return
+    for s in sessions or []:
+        sid = (
+            s.get("id")
+            or s.get("terminal_id")
+            or s.get("session_id")
+            or ""
+        )
+        status = s.get("status") or s.get("state") or ""
+        mode = s.get("mode") or s.get("share_mode") or ""
+        created = _fmt_ts(s.get("created_at") or s.get("create_time"))
+        parts = [f"terminal={sid}"]
+        if status:
+            parts.append(_status_zh(status))
+        if mode:
+            parts.append(f"模式={mode}")
+        if created != "-":
+            parts.append(created)
+        print("  ".join(parts))
 
 
 def cmd_api_key_create(client: MonkeyCodeClient) -> None:
@@ -341,6 +503,33 @@ def cmd_api_key_create(client: MonkeyCodeClient) -> None:
 def cmd_api_key_delete(client: MonkeyCodeClient, key_id: str) -> None:
     """删除 API Key。"""
     print_json(client.delete_api_key(key_id))
+
+
+def cmd_list_hosts(client: MonkeyCodeClient) -> None:
+    """列出云端环境（状态/核心/内存/自建公共）。"""
+    hosts = client.list_hosts()
+    if not hosts:
+        print("暂无宿主。")
+        return
+    for h in hosts or []:
+        print(_host_line(h))
+
+
+def cmd_list_images(client: MonkeyCodeClient) -> None:
+    """列出镜像。"""
+    images = client.list_images()
+    if not images:
+        print("暂无镜像。")
+        return
+    for img in images or []:
+        name = img.get("name") or img.get("image_name") or img.get("id") or ""
+        iid = img.get("id") or ""
+        default = " [默认]" if img.get("is_default") else ""
+        remark = img.get("remark") or img.get("description") or ""
+        line = f"{name} ({iid}){default}"
+        if remark:
+            line += f" | {str(remark)[:40]}"
+        print(line)
 
 
 def cmd_list_models(client: MonkeyCodeClient) -> None:
@@ -369,8 +558,30 @@ def cmd_list_models(client: MonkeyCodeClient) -> None:
 
 
 def cmd_list_available_models(client: MonkeyCodeClient) -> None:
-    """列出可用模型。"""
-    print_json(client.list_available_models())
+    """列出可用模型（按分类分组）。"""
+    data = client.list_available_models()
+    models = data.get("models") if isinstance(data, dict) else (data or [])
+    if not models:
+        print("暂无可用模型。")
+        return
+    groups = group_models(models)
+    group_labels = (
+        ("private", "我的模型"),
+        ("basic", "基础模型"),
+        ("pro", "专业模型"),
+        ("ultra", "旗舰模型"),
+        ("other", "其他"),
+    )
+    for key, label in group_labels:
+        items = groups.get(key) or []
+        if not items:
+            continue
+        print(f"【{label}】{len(items)} 个")
+        for m in items:
+            name = m.get("model") or m.get("name") or m.get("id") or ""
+            paid = "" if m.get("is_free") else " [付费]"
+            print(f"  · {name}{paid}")
+    print(f"可用模型共 {len(models)} 个")
 
 
 def cmd_list_model_providers(
@@ -381,14 +592,32 @@ def cmd_list_model_providers(
     api_header: str | None = None,
 ) -> None:
     """列出模型供应商的模型列表。"""
-    print_json(
-        client.list_model_providers(
+    try:
+        data = client.list_model_providers(
             provider=provider,
             base_url=base_url,
             api_key=api_key,
             api_header=api_header,
         )
+    except APIError as e:
+        print(f"❌ 获取模型列表失败：{e}")
+        return
+    if isinstance(data, str):
+        print(data[:500])
+        return
+    models = (
+        data.get("models")
+        if isinstance(data, dict)
+        else (data if isinstance(data, list) else [])
     )
+    if not models:
+        print("未返回模型列表。")
+        print_json(data)
+        return
+    for m in models or []:
+        name = m.get("model") or m.get("name") or m.get("id") or ""
+        mid = m.get("id") or ""
+        print(f"  · {name} ({mid})")
 
 
 def cmd_switch_model(
@@ -403,6 +632,85 @@ def cmd_restart(client: MonkeyCodeClient, task_id: str) -> None:
     """重启任务。"""
     result = asyncio.run(client.restart_task(task_id))
     print_json(result)
+
+
+def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
+    """按子命令分发执行；捕获异常打印友好错误而不是 Traceback。"""
+    try:
+        if args.command == "whoami":
+            cmd_whoami(client)
+        elif args.command == "logout":
+            cmd_logout(client)
+        elif args.command == "list-hosts":
+            cmd_list_hosts(client)
+        elif args.command == "list-images":
+            cmd_list_images(client)
+        elif args.command == "list-models":
+            cmd_list_models(client)
+        elif args.command == "list-available-models":
+            cmd_list_available_models(client)
+        elif args.command == "list-model-providers":
+            cmd_list_model_providers(
+                client,
+                args.provider,
+                args.base_url,
+                args.api_key,
+                args.api_header,
+            )
+        elif args.command == "list-tasks":
+            cmd_list_tasks(client, args.limit, args.full)
+        elif args.command == "wallet":
+            cmd_wallet(client)
+        elif args.command == "checkin":
+            cmd_checkin(client)
+        elif args.command == "wallet-tx":
+            cmd_wallet_tx(client)
+        elif args.command == "list-projects":
+            cmd_list_projects(client)
+        elif args.command == "options":
+            cmd_options(client)
+        elif args.command == "vms":
+            cmd_vms(client)
+        elif args.command == "api-key":
+            if args.api_key_command == "create":
+                cmd_api_key_create(client)
+            else:
+                cmd_api_key_delete(client, args.key_id)
+        elif args.command == "task-info":
+            cmd_task_info(client, args.task_id)
+        elif args.command == "rounds":
+            cmd_rounds(
+                client,
+                args.task_id,
+                args.limit,
+                args.all,
+                args.turn,
+                args.color,
+            )
+        elif args.command == "task-stop":
+            cmd_task_stop(client, args.task_id)
+        elif args.command == "task-delete":
+            cmd_task_delete(client, args.task_id)
+        elif args.command == "send-msg":
+            cmd_send_msg(client, args.task_id, args.content)
+        elif args.command == "terminal":
+            cmd_terminal(client, args.vm_id)
+        elif args.command == "switch-model":
+            cmd_switch_model(client, args.task_id, args.model_id)
+        elif args.command == "restart":
+            cmd_restart(client, args.task_id)
+        elif args.command == "run":
+            cmd_run(client, args.content)
+        elif args.command == "links":
+            cmd_links(client, args.task_id)
+    except (APIError, TaskError) as e:
+        print(f"❌ {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        print(f"❌ 发生未预期错误：{type(e).__name__}: {e}")
+        sys.exit(1)
 
 
 def main() -> None:
@@ -431,7 +739,9 @@ def main() -> None:
     lm_p.add_argument("base_url", help="Base URL")
     lm_p.add_argument("api_key", help="API Key")
     lm_p.add_argument("--api-header", default=None, help="API 请求头")
-    sub.add_parser("list-tasks", help="列出最近任务")
+    tasks_p = sub.add_parser("list-tasks", help="列出最近任务（含时间）")
+    tasks_p.add_argument("--limit", type=int, default=10, help="条数，默认 10")
+    tasks_p.add_argument("--full", action="store_true", help="显示完整任务内容")
     sub.add_parser("wallet", help="查看钱包余额")
     sub.add_parser("checkin", help="每日签到")
     sub.add_parser("wallet-tx", help="查看钱包交易记录")
@@ -510,72 +820,7 @@ def main() -> None:
                 print(f"或先运行 python3 cli.py login 刷新会话文件（{args.session}）。")
                 sys.exit(1)
             interactive_login(client)
-        if args.command == "whoami":
-            cmd_whoami(client)
-        elif args.command == "logout":
-            cmd_logout(client)
-        elif args.command == "list-hosts":
-            print_json(client.list_hosts())
-        elif args.command == "list-images":
-            print_json(client.list_images())
-        elif args.command == "list-models":
-            cmd_list_models(client)
-        elif args.command == "list-available-models":
-            cmd_list_available_models(client)
-        elif args.command == "list-model-providers":
-            cmd_list_model_providers(
-                client,
-                args.provider,
-                args.base_url,
-                args.api_key,
-                args.api_header,
-            )
-        elif args.command == "list-tasks":
-            cmd_list_tasks(client)
-        elif args.command == "wallet":
-            cmd_wallet(client)
-        elif args.command == "checkin":
-            cmd_checkin(client)
-        elif args.command == "wallet-tx":
-            cmd_wallet_tx(client)
-        elif args.command == "list-projects":
-            cmd_list_projects(client)
-        elif args.command == "options":
-            cmd_options(client)
-        elif args.command == "vms":
-            cmd_vms(client)
-        elif args.command == "api-key":
-            if args.api_key_command == "create":
-                cmd_api_key_create(client)
-            else:
-                cmd_api_key_delete(client, args.key_id)
-        elif args.command == "task-info":
-            cmd_task_info(client, args.task_id)
-        elif args.command == "rounds":
-            cmd_rounds(
-                client,
-                args.task_id,
-                args.limit,
-                args.all,
-                args.turn,
-                args.color,
-            )
-        elif args.command == "task-stop":
-            cmd_task_stop(client, args.task_id)
-        elif args.command == "task-delete":
-            cmd_task_delete(client, args.task_id)
-        elif args.command == "send-msg":
-            cmd_send_msg(client, args.task_id, args.content)
-        elif args.command == "terminal":
-            cmd_terminal(client, args.vm_id)
-        elif args.command == "switch-model":
-            cmd_switch_model(client, args.task_id, args.model_id)
-        elif args.command == "restart":
-            cmd_restart(client, args.task_id)
-        elif args.command == "run":
-            cmd_run(client, args.content)
-        elif args.command == "links":
-            cmd_links(client, args.task_id)
+        _dispatch(client, args)
 
 
 if __name__ == "__main__":

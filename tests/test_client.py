@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from monkeycode import (
+    APIError,
     AuthenticationError,
     MonkeyCodeClient,
 )
@@ -29,6 +30,51 @@ def json_response(body, status=200, headers=None):
 
 def read_json(request: httpx.Request) -> dict:
     return json.loads(request.content.decode("utf-8"))
+
+
+def test_list_git_identities_redacts_token() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response(
+            {
+                "code": 0,
+                "data": {
+                    "identities": [
+                        {
+                            "id": "g1",
+                            "name": "my-bot",
+                            "access_token": "ghp_123456",
+                            "token": "raw-secret",
+                        }
+                    ]
+                },
+            }
+        )
+
+    client = make_client(handler)
+    data = client.list_git_identities()
+    identity = data["identities"][0]
+    assert identity["id"] == "g1"
+    assert identity["name"] == "my-bot"
+    assert identity["access_token"] == "***"
+    assert identity["token"] == "***"
+
+
+def test_list_playground_posts_not_found_raises() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response({"message": "Not Found"})
+
+    client = make_client(handler)
+    with pytest.raises(APIError):
+        client.list_playground_posts()
+
+
+def test_get_license_status_not_found_raises() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return json_response({"message": "Not Found"})
+
+    client = make_client(handler)
+    with pytest.raises(APIError):
+        client.get_license_status()
 
 
 # ---------- 登录 ----------
