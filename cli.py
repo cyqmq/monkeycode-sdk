@@ -10,6 +10,7 @@
     python cli.py list-images            # 列出镜像
     python cli.py list-models            # 列出模型
     python cli.py run "写一个 hello world"  # 提交任务并轮询结果
+    python cli.py rounds <task_id>       # 查看执行轮次（解码后按 turn_seq 打印）
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ from monkeycode import (
     TaskError,
 )
 from monkeycode.models import RepoReq
+from monkeycode.stream import format_round_text
 
 
 def default_session_path() -> str:
@@ -36,11 +38,16 @@ def default_session_path() -> str:
     )
 
 
-def get_credentials() -> tuple[str, str]:
+def get_credentials(session_path: str | None = None) -> tuple[str, str]:
+    """读取登录凭证。已有会话文件时不必再设环境变量。"""
     email = os.environ.get("MONKEYCODE_EMAIL", "").strip()
     password = os.environ.get("MONKEYCODE_PASSWORD", "")
+    path = session_path or default_session_path()
+    if (not email or not password) and os.path.exists(path):
+        return email, password
     if not email or not password:
         print("缺少凭证：请设置环境变量 MONKEYCODE_EMAIL 和 MONKEYCODE_PASSWORD")
+        print(f"或先登录一次，会话文件：{path}")
         sys.exit(1)
     return email, password
 
@@ -123,6 +130,28 @@ def cmd_list_tasks(client: MonkeyCodeClient) -> None:
 def cmd_task_info(client: MonkeyCodeClient, task_id: str) -> None:
     """查看任务详情。"""
     print_json(client.get_task(task_id).raw)
+
+
+def cmd_rounds(client: MonkeyCodeClient, task_id: str, limit: int = 20) -> None:
+    """打印任务轮次：解码后按 turn_seq 排序。"""
+    data = client.get_task_rounds(task_id, limit=limit)
+    chunks = data.get("chunks") if isinstance(data, dict) else (data or [])
+    chunks = sorted(
+        chunks or [],
+        key=lambda c: (
+            int(c.get("turn_seq") or 0),
+            int(c.get("timestamp") or 0),
+        ),
+    )
+    if not chunks:
+        print("暂无轮次记录。")
+        return
+    for c in chunks:
+        event = c.get("event") or c.get("kind") or c.get("type") or "unknown"
+        seq = c.get("turn_seq")
+        prefix = f"turn={seq} " if seq is not None else ""
+        text = format_round_text(c.get("data", ""))
+        print(f"{prefix}[{event}] {text}")
 
 
 def cmd_task_stop(client: MonkeyCodeClient, task_id: str) -> None:
@@ -290,6 +319,10 @@ def main() -> None:
     info_p = sub.add_parser("task-info", help="查看任务详情")
     info_p.add_argument("task_id", help="任务 ID")
 
+    rounds_p = sub.add_parser("rounds", help="查看任务执行轮次（解码后按 turn_seq 打印）")
+    rounds_p.add_argument("task_id", help="任务 ID")
+    rounds_p.add_argument("--limit", type=int, default=20, help="拉取条数，默认 20")
+
     stop_p = sub.add_parser("task-stop", help="停止任务")
     stop_p.add_argument("task_id", help="任务 ID")
 
@@ -311,7 +344,7 @@ def main() -> None:
     restart_p.add_argument("task_id", help="任务 ID")
 
     args = parser.parse_args()
-    email, password = get_credentials()
+    email, password = get_credentials(args.session)
     with MonkeyCodeClient(
         email=email,
         password=password,
@@ -319,6 +352,9 @@ def main() -> None:
         session_path=args.session,
     ) as client:
         if args.command == "login":
+            if not email or not password:
+                print("login 需要环境变量 MONKEYCODE_EMAIL 和 MONKEYCODE_PASSWORD")
+                sys.exit(1)
             interactive_login(client)
             return
         # 有持久化会话则直接使用；无效时 SDK 会自动重登
@@ -367,6 +403,8 @@ def main() -> None:
                 cmd_api_key_delete(client, args.key_id)
         elif args.command == "task-info":
             cmd_task_info(client, args.task_id)
+        elif args.command == "rounds":
+            cmd_rounds(client, args.task_id, args.limit)
         elif args.command == "task-stop":
             cmd_task_stop(client, args.task_id)
         elif args.command == "task-delete":

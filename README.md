@@ -16,7 +16,7 @@ MonkeyCode 云平台 REST API 的 Python SDK：认证登录、任务调度、Web
 - 团队管理：用户/分组/宿主/镜像/模型/技能/MCP/通知/OAuth/扩展包完整控制面
 - 分页迭代：`iter_tasks` / `iter_projects` / `paginate` 自动翻页
 - 健壮性：只读请求自动重试（指数退避）、429 限流等待、错误提示友好化
-- CLI：25+ 命令（任务/钱包/项目/终端/API Key/会话控制）
+- CLI：26+ 命令（任务/钱包/项目/终端/API Key/会话控制，含 `rounds`）
 - 覆盖完整 REST API（镜像/MCP/通知/团队管理/License/社区等）
 - 支持自托管部署
 

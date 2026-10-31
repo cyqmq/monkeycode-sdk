@@ -154,6 +154,117 @@ def decode_chunk(raw: str) -> TaskStreamChunk:
     )
 
 
+def _try_b64(s: str) -> str | None:
+    """尝试把字符串当 base64 解码；失败返回 None。"""
+    raw = s.replace("-", "+").replace("_", "/")
+    pad = "=" * ((4 - len(raw) % 4) % 4)
+    try:
+        return base64.b64decode(raw + pad).decode("utf-8")
+    except Exception:
+        return None
+
+
+def _coerce_round_payload(data: Any) -> Any:
+    """把 rounds chunk 的 data 规范成 dict/str。"""
+    if data is None:
+        return ""
+    if isinstance(data, (dict, list)):
+        return data
+    if not isinstance(data, str):
+        return str(data)
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError:
+        pass
+    decoded = _try_b64(data)
+    if decoded is None:
+        return data
+    try:
+        return json.loads(decoded)
+    except json.JSONDecodeError:
+        return decoded
+
+
+def _extract_text_field(value: Any) -> str:
+    """从 ACP content/message 字段抽出纯文本。"""
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, dict):
+        text = value.get("text") or value.get("message") or value.get("content")
+        if isinstance(text, str):
+            return text
+    if isinstance(value, list):
+        parts = [_extract_text_field(item) for item in value]
+        return "".join(p for p in parts if p)
+    return ""
+
+
+def format_round_text(data: Any, max_len: int = 400) -> str:
+    """把任务轮次 data 解码为可读短文本。
+
+    - user-input：解开内层 content 的第二层 base64，得到用户原话
+    - task-running ACP：按 sessionUpdate 分类精简
+      available_commands_update / agent_message / tool_call
+    """
+    obj = _coerce_round_payload(data)
+    if not isinstance(obj, dict):
+        text = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False)
+        return text[:max_len]
+
+    if str(obj.get("type") or "") == "user-input" and "content" not in obj:
+        inner_data = obj.get("data")
+        if inner_data is not None:
+            return format_round_text(inner_data, max_len)
+
+    content = obj.get("content")
+    if isinstance(content, str):
+        inner = _try_b64(content)
+        if inner is not None and inner != content:
+            return inner[:max_len]
+
+    update = obj.get("update") if isinstance(obj.get("update"), dict) else {}
+    session_update = str(
+        obj.get("sessionUpdate") or update.get("sessionUpdate") or ""
+    )
+    src = update if update.get("sessionUpdate") else obj
+    if session_update:
+        if session_update == "available_commands_update":
+            cmds = src.get("availableCommands") or update.get("availableCommands") or []
+            names = [
+                c.get("name")
+                for c in cmds
+                if isinstance(c, dict) and c.get("name")
+            ][:10]
+            if names:
+                return f"[可用命令更新] {'、'.join(names)}"
+            return f"[可用命令更新] 共 {len(cmds)} 项"
+        if session_update in ("agent_message", "agent_message_chunk"):
+            msg = (
+                _extract_text_field(src.get("message"))
+                or _extract_text_field(src.get("content"))
+                or _extract_text_field(update.get("message"))
+                or _extract_text_field(update.get("content"))
+            )
+            return msg[:max_len]
+        if session_update in ("tool_call", "tool_call_update"):
+            title = src.get("title") or src.get("kind") or src.get("toolName") or ""
+            status = src.get("status") or ""
+            extra = " ".join(str(x) for x in (title, status) if x)
+            if extra:
+                return f"[工具调用] {extra}"[:max_len]
+            return f"[工具调用] {json.dumps(src, ensure_ascii=False)[:300]}"
+        return (
+            f"[{session_update}] "
+            f"{json.dumps(src, ensure_ascii=False)[:300]}"
+        )
+
+    for key in ("content", "message", "text"):
+        extracted = _extract_text_field(obj.get(key))
+        if extracted:
+            return extracted[:max_len]
+    return json.dumps(obj, ensure_ascii=False)[:max_len]
+
+
 class TaskStream:
     """任务实时流（WebSocket 会话）。
 

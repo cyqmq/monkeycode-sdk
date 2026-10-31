@@ -6,7 +6,12 @@ import json
 import pytest
 
 from monkeycode.errors import APIError, AuthenticationError
-from monkeycode.stream import _ws_connect, decode_chunk, encode_user_input
+from monkeycode.stream import (
+    _ws_connect,
+    decode_chunk,
+    encode_user_input,
+    format_round_text,
+)
 
 
 def test_encode_user_input_structure() -> None:
@@ -54,6 +59,67 @@ def test_decode_chunk_metadata() -> None:
     assert chunk.type == "task-started"
     assert chunk.timestamp == 123
     assert chunk.turn_seq == 5
+
+
+def test_format_round_text_user_input_outer_envelope() -> None:
+    text = format_round_text(json.loads(encode_user_input("继续")))
+    assert text == "继续"
+
+
+def test_format_round_text_user_input_double_b64() -> None:
+    inner = json.dumps(
+        {
+            "content": base64.b64encode(
+                "给我当前在运行的会话和账户详情".encode()
+            ).decode(),
+            "attachments": [],
+        }
+    )
+    data = base64.b64encode(inner.encode()).decode()
+    assert format_round_text(data) == "给我当前在运行的会话和账户详情"
+
+
+def test_format_round_text_available_commands_update() -> None:
+    payload = {
+        "sessionId": "ses_e783",
+        "update": {
+            "sessionUpdate": "available_commands_update",
+            "availableCommands": [
+                {"name": "customize-opencode", "description": "x"},
+                {"name": "deploy-website"},
+            ],
+        },
+    }
+    text = format_round_text(payload)
+    assert text.startswith("[可用命令更新]")
+    assert "customize-opencode" in text
+    assert "deploy-website" in text
+
+
+def test_format_round_text_agent_message() -> None:
+    payload = {
+        "sessionId": "ses_1",
+        "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {"type": "text", "text": "正在查看会话"},
+        },
+    }
+    assert format_round_text(payload) == "正在查看会话"
+
+
+def test_format_round_text_tool_call() -> None:
+    payload = {
+        "sessionId": "ses_1",
+        "update": {
+            "sessionUpdate": "tool_call",
+            "title": "Read App.vue",
+            "kind": "read",
+            "status": "completed",
+        },
+    }
+    text = format_round_text(payload)
+    assert text.startswith("[工具调用]")
+    assert "Read App.vue" in text
 
 
 # ---------- 连接异常包装 ----------

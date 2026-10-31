@@ -19,7 +19,7 @@ python cli.py whoami                      # 显示当前登录账户信息
 python cli.py logout                      # 退出当前会话
 ```
 
-除 `login` 外的命令会自动复用持久化会话；会话失效时 SDK 自动重登。
+除 `login` 外的命令会自动复用持久化会话（`~/.monkeycode_session.json` 或 `--session`）；已有会话文件时不必再设邮箱密码环境变量。会话失效时 SDK 自动重登（此时仍需环境变量）。
 
 ## 任务
 
@@ -33,6 +33,7 @@ python cli.py send-msg <task_id> "继续"       # 向运行中的任务发送消
 python cli.py links <task_id>                 # 列出任务预览链接及存活状态
 python cli.py switch-model <task_id> <model_id>  # 切换运行中任务的模型
 python cli.py restart <task_id>               # 重启任务
+python cli.py rounds <task_id> [--limit 20]   # 查看执行轮次（解码后按 turn_seq 打印）
 ```
 
 ## 环境 / 项目

@@ -1,5 +1,14 @@
 # 更新日志
 
+## [1.8.0] - 2026-10-31
+
+### 新增
+- CLI `rounds <task_id>`：解码任务轮次后按 `turn_seq` 打印（user-input 双层 base64、ACP `sessionUpdate` 分类精简）
+- `format_round_text()`：把 rounds chunk 的 data 解码为可读短文本
+
+### 改进
+- CLI `get_credentials()`：已有 `~/.monkeycode_session.json`（或 `--session`）时不必再设 `MONKEYCODE_EMAIL` / `MONKEYCODE_PASSWORD`
+
 ## [1.7.5] - 2026-10-31
 
 ### 其他

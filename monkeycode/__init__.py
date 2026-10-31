@@ -29,9 +29,10 @@ from monkeycode.stream import (
     JoinTerminalStream,
     TaskStream,
     TerminalStream,
+    format_round_text,
 )
 
-__version__ = "1.7.5"
+__version__ = "1.8.0"
 
 __all__ = [
     "MonkeyCodeClient",
@@ -55,4 +56,5 @@ __all__ = [
     "TerminalStream",
     "JoinTerminalStream",
     "AgentSession",
+    "format_round_text",
 ]
