@@ -838,11 +838,6 @@ def main() -> None:
 
     args = parser.parse_args()
     email, password = get_credentials(args.session)
-    if not email and os.path.exists(args.session):
-        print(
-            "提示：将复用持久化会话。若会话已过期，请设置 "
-            "MONKEYCODE_EMAIL / MONKEYCODE_PASSWORD 以便自动重登。"
-        )
     with MonkeyCodeClient(
         email=email,
         password=password,

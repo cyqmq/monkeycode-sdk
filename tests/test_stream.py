@@ -81,6 +81,17 @@ def test_format_round_text_user_input_double_b64() -> None:
     assert format_round_text(data) == "给我当前在运行的会话和账户详情"
 
 
+def test_format_round_text_multiline_base64() -> None:
+    """多行日志中的 base64（含换行符）应能解码，不再露出原文。"""
+    content = base64.b64encode("继续".encode()).decode()
+    # 把 base64 拆成多行（模拟日志输出）
+    multiline = "\n".join(
+        content[i : i + 40] for i in range(0, len(content), 40)
+    )
+    payload = {"type": "user-input", "data": multiline}
+    assert format_round_text(payload) == "继续"
+
+
 def test_format_round_text_available_commands_update() -> None:
     payload = {
         "sessionId": "ses_e783",

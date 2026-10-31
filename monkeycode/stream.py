@@ -156,8 +156,12 @@ def decode_chunk(raw: str) -> TaskStreamChunk:
 
 
 def _try_b64(s: str) -> str | None:
-    """尝试把字符串当 base64 解码；失败返回 None。"""
-    raw = s.replace("-", "+").replace("_", "/")
+    """尝试把字符串当 base64 解码；失败返回 None。
+
+    多行日志中的 base64 可能包含换行符，先去掉空白再解码。
+    """
+    raw = re.sub(r"\s+", "", s)
+    raw = raw.replace("-", "+").replace("_", "/")
     pad = "=" * ((4 - len(raw) % 4) % 4)
     try:
         return base64.b64decode(raw + pad).decode("utf-8")
