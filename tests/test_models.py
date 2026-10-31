@@ -153,3 +153,28 @@ def test_group_models_partitions() -> None:
     assert [m["id"] for m in g["other"]] == ["m6"]
     # paid 是交叉筛选：is_free == false 的模型
     assert [m["id"] for m in g["paid"]] == ["m2", "m3", "m4"]
+
+
+def test_group_models_filters_hidden_and_dedupes() -> None:
+    from monkeycode.models import group_models
+
+    models = [
+        {"id": "h1", "model": "hidden-model", "access_level": "basic",
+         "is_free": True, "is_hidden": True, "owner": {"type": "user"}},
+        {"id": "dup", "model": "glm-5", "access_level": "pro",
+         "is_free": True, "owner": {"type": "user"}},
+        {"id": "dup", "model": "glm-5", "access_level": "pro",
+         "is_free": True, "owner": {"type": "user"}},
+        {"id": "ok", "model": "glm-5", "access_level": "pro",
+         "is_free": True, "owner": {"type": "user"}},
+    ]
+    g = group_models(models)
+    # 隐藏模型不出现；同一 id 只保留一条
+    ids = [m["id"] for m in g["pro"]]
+    assert "h1" not in ids
+    assert ids == ["dup", "ok"]
+
+    # include_hidden=True 时隐藏模型出现
+    g2 = group_models(models, include_hidden=True)
+    hidden_ids = [m["id"] for m in g2["basic"]]
+    assert "h1" in hidden_ids

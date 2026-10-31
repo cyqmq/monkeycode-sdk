@@ -33,9 +33,10 @@ from monkeycode.stream import (
     format_round_text,
     round_kind,
     round_label,
+    round_tool_title,
 )
 
-__version__ = "1.10.0"
+__version__ = "1.11.0"
 
 __all__ = [
     "MonkeyCodeClient",
@@ -62,5 +63,6 @@ __all__ = [
     "format_round_text",
     "round_kind",
     "round_label",
+    "round_tool_title",
     "group_models",
 ]

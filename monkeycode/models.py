@@ -16,8 +16,12 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
-def group_models(models: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+def group_models(
+    models: list[dict[str, Any]], include_hidden: bool = False
+) -> dict[str, list[dict[str, Any]]]:
     """按页面分类对模型列表本地分组（无单独分类接口）。
+
+    默认过滤 is_hidden=true 的模型，并按 id 去重（与平台页面一致）。
 
     互斥分组（owner.type=private 优先）：
     - private：我的模型（owner.type == "private"）
@@ -27,6 +31,18 @@ def group_models(models: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]
     - other：其他
     - paid：付费模型（is_free == false，交叉筛选，可能与上述分组重叠）
     """
+    seen: set[str] = set()
+    cleaned: list[dict[str, Any]] = []
+    for m in models or []:
+        if not include_hidden and m.get("is_hidden"):
+            continue
+        mid = str(m.get("id") or m.get("model") or "")
+        if mid and mid in seen:
+            continue
+        if mid:
+            seen.add(mid)
+        cleaned.append(m)
+
     groups: dict[str, list[dict[str, Any]]] = {
         "private": [],
         "basic": [],
@@ -35,7 +51,7 @@ def group_models(models: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]
         "other": [],
     }
     paid: list[dict[str, Any]] = []
-    for m in models or []:
+    for m in cleaned:
         owner = m.get("owner") if isinstance(m.get("owner"), dict) else {}
         owner_type = str(owner.get("type") or "").lower()
         access_level = str(m.get("access_level") or "").lower()

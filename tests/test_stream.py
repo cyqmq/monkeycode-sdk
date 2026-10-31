@@ -93,7 +93,8 @@ def test_format_round_text_available_commands_update() -> None:
         },
     }
     text = format_round_text(payload)
-    assert text.startswith("[可用命令更新]")
+    # 前缀由标签提供，text 只返回纯内容
+    assert not text.startswith("[可用命令更新]")
     assert "customize-opencode" in text
     assert "deploy-website" in text
 
@@ -109,6 +110,28 @@ def test_format_round_text_agent_message() -> None:
     assert format_round_text(payload) == "正在查看会话"
 
 
+def test_format_round_text_agent_thought_chunk() -> None:
+    payload = {
+        "sessionId": "ses_1",
+        "update": {
+            "sessionUpdate": "agent_thought_chunk",
+            "thought": {"type": "text", "text": "让我先读取文件"},
+        },
+    }
+    assert format_round_text(payload) == "让我先读取文件"
+
+
+def test_format_round_text_usage_update() -> None:
+    payload = {
+        "sessionId": "ses_1",
+        "update": {
+            "sessionUpdate": "usage_update",
+            "usage": {"totalTokens": 1234},
+        },
+    }
+    assert format_round_text(payload) == "用量：1234"
+
+
 def test_format_round_text_tool_call() -> None:
     payload = {
         "sessionId": "ses_1",
@@ -120,8 +143,31 @@ def test_format_round_text_tool_call() -> None:
         },
     }
     text = format_round_text(payload)
-    assert text.startswith("[工具调用]")
+    assert not text.startswith("[工具调用]")
     assert "Read App.vue" in text
+
+
+def test_format_round_text_redacts_envs() -> None:
+    """call 事件中的 execution_config.envs 不得泄露密钥。"""
+    payload = {
+        "sessionId": "ses_1",
+        "update": {
+            "sessionUpdate": "call",
+            "title": "RunCommand",
+            "status": "pending",
+            "execution_config": {
+                "envs": {
+                    "OPENAI_API_KEY": "sk-secret-abc",
+                    "OPEN_CODE_API_KEY": "secret-def",
+                }
+            },
+        },
+    }
+    text = format_round_text(payload)
+    assert "sk-secret-abc" not in text
+    assert "secret-def" not in text
+    assert "OPENAI_API_KEY" not in text
+    assert "RunCommand" in text
 
 
 def test_round_kind_and_label_classify() -> None:
@@ -154,6 +200,24 @@ def test_round_kind_and_label_classify() -> None:
     }
     assert round_kind(tool) == "tool"
     assert round_label(tool) == "工具"
+
+    thought = {
+        "update": {"sessionUpdate": "agent_thought_chunk", "thought": "x"},
+    }
+    assert round_kind(thought) == "agent"
+    assert round_label(thought) == "思考"
+
+    usage = {
+        "update": {"sessionUpdate": "usage_update", "usage": {"totalTokens": 1}},
+    }
+    assert round_kind(usage) == "system"
+    assert round_label(usage) == "用量"
+
+    call = {
+        "update": {"sessionUpdate": "call", "title": "RunCommand"},
+    }
+    assert round_kind(call) == "tool"
+    assert round_label(call) == "调用"
 
     user = {"type": "user-input", "content": "继续"}
     assert round_kind(user) == "user"

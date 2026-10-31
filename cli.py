@@ -5,12 +5,12 @@
     export MONKEYCODE_EMAIL=you@example.com
     export MONKEYCODE_PASSWORD=your_password
 
-    python cli.py login                 # 登录（PoW 验证码自动求解）
-    python cli.py list-hosts             # 列出云端环境
-    python cli.py list-images            # 列出镜像
-    python cli.py list-models            # 列出模型
-    python cli.py run "写一个 hello world"  # 提交任务并轮询结果
-    python cli.py rounds <task_id>       # 查看执行轮次（解码后按 turn_seq 打印）
+    python3 cli.py login                 # 登录（PoW 验证码自动求解）
+    python3 cli.py list-hosts             # 列出云端环境
+    python3 cli.py list-images            # 列出镜像
+    python3 cli.py list-models            # 列出模型（按分类分组）
+    python3 cli.py run "写一个 hello world"  # 提交任务并轮询结果
+    python3 cli.py rounds <task_id>       # 查看执行轮次（解码后按 turn 折叠）
 """
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from monkeycode.stream import (
     format_round_text,
     round_kind,
     round_label,
+    round_tool_title,
 )
 
 
@@ -73,12 +74,18 @@ def interactive_login(client: MonkeyCodeClient) -> None:
 def cmd_run(client: MonkeyCodeClient, content: str) -> None:
     hosts = client.list_hosts()
     images = client.list_images()
-    models = client.list_models()
+    grouped = group_models(client.list_models())
+    visible_models = (
+        grouped.get("private", [])
+        + grouped.get("basic", [])
+        + grouped.get("pro", [])
+        + grouped.get("ultra", [])
+    )
     if not hosts:
         raise TaskError("没有可用的云端宿主（hosts），请先在控制台创建环境。")
     if not images:
         raise TaskError("没有可用的镜像（images）。")
-    if not models:
+    if not visible_models:
         raise TaskError("没有可用的模型（models）。")
     repo_url = input("请输入 GitHub 仓库 URL（回车跳过）：").strip()
     repo = RepoReq(repo_url=repo_url) if repo_url else RepoReq(repo_url="")
@@ -87,7 +94,7 @@ def cmd_run(client: MonkeyCodeClient, content: str) -> None:
         repo=repo,
         host_id=hosts[0]["id"],
         image_id=images[0]["id"],
-        model_id=models[0]["id"],
+        model_id=visible_models[0]["id"],
     )
     print(f"任务已创建：{task.id}，状态 {task.status}")
     print("等待任务完成...")
@@ -146,35 +153,113 @@ _KIND_COLORS = {
 }
 
 
-def cmd_rounds(
-    client: MonkeyCodeClient, task_id: str, limit: int = 20, color: bool = False
-) -> None:
-    """打印任务轮次：解码后按 turn_seq 排序，用标签区分事件类型。"""
-    data = client.get_task_rounds(task_id, limit=limit)
-    chunks = data.get("chunks") if isinstance(data, dict) else (data or [])
-    chunks = sorted(
-        chunks or [],
-        key=lambda c: (
-            int(c.get("turn_seq") or 0),
-            int(c.get("timestamp") or 0),
-        ),
-    )
-    if not chunks:
-        print("暂无轮次记录。")
-        return
+def _fetch_rounds(
+    client: MonkeyCodeClient, task_id: str, limit: int, all_rounds: bool
+) -> list[dict]:
+    """拉取任务轮次；--all 时按 next_cursor 分页取全部。"""
+    if not all_rounds:
+        data = client.get_task_rounds(task_id, limit=limit)
+        return data.get("chunks") if isinstance(data, dict) else (data or [])
+    chunks: list[dict] = []
+    cursor: str | None = None
+    while True:
+        data = client.get_task_rounds(task_id, cursor=cursor, limit=100)
+        if not isinstance(data, dict):
+            break
+        batch = data.get("chunks") or []
+        if not batch:
+            break
+        chunks.extend(batch)
+        if data.get("has_more") and data.get("next_cursor"):
+            cursor = data["next_cursor"]
+        else:
+            break
+    return chunks
+
+
+def _dedupe_tool_calls(chunks: list[dict]) -> list[dict]:
+    """同一 turn 同一工具的状态流转（pending/in_progress/completed）只保留最后一条。"""
+    out: list[dict] = []
+    tool_idx: dict[tuple[int, str], int] = {}
     for c in chunks:
-        event = c.get("event") or c.get("kind") or c.get("type") or "unknown"
+        raw = c.get("data", "")
+        event = c.get("event") or c.get("kind") or c.get("type") or ""
+        try:
+            t = int(c.get("turn_seq") or 0)
+        except (TypeError, ValueError):
+            t = 0
+        if round_kind(raw, event) == "tool":
+            title = round_tool_title(raw)
+            key = (t, title)
+            if key in tool_idx:
+                out[tool_idx[key]] = c
+            else:
+                tool_idx[key] = len(out)
+                out.append(c)
+        else:
+            out.append(c)
+    return out
+
+
+def _print_rounds(chunks: list[dict], color: bool) -> None:
+    """按 turn 折叠打印；连续相同的命令更新只显示一次。"""
+    current_turn: int | None = None
+    last_cmd_key: tuple | None = None
+    for c in chunks:
         seq = c.get("turn_seq")
+        try:
+            t = int(seq) if seq is not None else None
+        except (TypeError, ValueError):
+            t = None
+        event = c.get("event") or c.get("kind") or c.get("type") or "unknown"
         raw = c.get("data", "")
         kind = round_kind(raw, event)
         label = round_label(raw, event)
         text = format_round_text(raw)
-        prefix = f"turn={seq} " if seq is not None else ""
+        if kind == "commands":
+            key = (t, label, text)
+            if key == last_cmd_key:
+                continue
+            last_cmd_key = key
+        else:
+            last_cmd_key = None
+        if t is not None and t != current_turn:
+            print(f"\n--- turn={t} ---")
+            current_turn = t
+        elif t is None:
+            print()
+        prefix = "  " if t is not None else ""
         if color:
             code = _KIND_COLORS.get(kind, "0")
             print(f"{prefix}\033[{code}m[{label}]\033[0m {text}")
         else:
             print(f"{prefix}[{label}] {text}")
+
+
+def cmd_rounds(
+    client: MonkeyCodeClient,
+    task_id: str,
+    limit: int = 20,
+    all_rounds: bool = False,
+    turn: int | None = None,
+    color: bool = False,
+) -> None:
+    """打印任务轮次：按 turn 折叠，支持 --all / --turn / --color。"""
+    chunks = _fetch_rounds(client, task_id, limit, all_rounds)
+    chunks = sorted(
+        chunks,
+        key=lambda c: (
+            int(c.get("turn_seq") or 0),
+            int(c.get("timestamp") or 0),
+        ),
+    )
+    if turn is not None:
+        chunks = [c for c in chunks if int(c.get("turn_seq") or 0) == turn]
+    chunks = _dedupe_tool_calls(chunks)
+    if not chunks:
+        print("暂无轮次记录。")
+        return
+    _print_rounds(chunks, color)
 
 
 def cmd_task_stop(client: MonkeyCodeClient, task_id: str) -> None:
@@ -191,8 +276,10 @@ def cmd_send_msg(client: MonkeyCodeClient, task_id: str, content: str) -> None:
     """向运行中的任务发送消息。"""
     events = asyncio.run(client.send_task_message(task_id, content))
     for e in events:
-        text = str(e.data)
-        print(f"{e.type}: {text[:200]}")
+        event = getattr(e, "type", "unknown")
+        label = round_label(e.data, event)
+        text = format_round_text(e.data)
+        print(f"[{label}] {text}")
 
 
 def cmd_wallet(client: MonkeyCodeClient) -> None:
@@ -257,7 +344,7 @@ def cmd_api_key_delete(client: MonkeyCodeClient, key_id: str) -> None:
 
 
 def cmd_list_models(client: MonkeyCodeClient) -> None:
-    """列出模型并按页面分类分组显示。"""
+    """列出模型并按页面分类分组显示（每条已标注是否付费）。"""
     models = client.list_models()
     if not models:
         print("暂无模型。")
@@ -279,9 +366,6 @@ def cmd_list_models(client: MonkeyCodeClient) -> None:
             name = m.get("model") or m.get("name") or m.get("id") or ""
             paid = "" if m.get("is_free") else " [付费]"
             print(f"  · {name}{paid}")
-    paid = groups.get("paid") or []
-    if paid:
-        print(f"【付费模型】{len(paid)} 个（is_free=false）")
 
 
 def cmd_list_available_models(client: MonkeyCodeClient) -> None:
@@ -370,9 +454,11 @@ def main() -> None:
     info_p = sub.add_parser("task-info", help="查看任务详情")
     info_p.add_argument("task_id", help="任务 ID")
 
-    rounds_p = sub.add_parser("rounds", help="查看任务执行轮次（解码后按 turn_seq 打印）")
+    rounds_p = sub.add_parser("rounds", help="查看任务执行轮次（按 turn 折叠打印）")
     rounds_p.add_argument("task_id", help="任务 ID")
     rounds_p.add_argument("--limit", type=int, default=20, help="拉取条数，默认 20")
+    rounds_p.add_argument("--all", action="store_true", help="分页拉取全部轮次")
+    rounds_p.add_argument("--turn", type=int, default=None, help="只显示指定 turn")
     rounds_p.add_argument("--color", action="store_true", help="用 ANSI 颜色区分事件类型")
 
     stop_p = sub.add_parser("task-stop", help="停止任务")
@@ -397,6 +483,11 @@ def main() -> None:
 
     args = parser.parse_args()
     email, password = get_credentials(args.session)
+    if not email and os.path.exists(args.session):
+        print(
+            "提示：将复用持久化会话。若会话已过期，请设置 "
+            "MONKEYCODE_EMAIL / MONKEYCODE_PASSWORD 以便自动重登。"
+        )
     with MonkeyCodeClient(
         email=email,
         password=password,
@@ -413,6 +504,11 @@ def main() -> None:
         try:
             client.whoami()
         except AuthenticationError:
+            if not email or not password:
+                print("会话已过期或无效，且未提供邮箱/密码环境变量。")
+                print("请设置 MONKEYCODE_EMAIL 和 MONKEYCODE_PASSWORD 后重试，")
+                print(f"或先运行 python3 cli.py login 刷新会话文件（{args.session}）。")
+                sys.exit(1)
             interactive_login(client)
         if args.command == "whoami":
             cmd_whoami(client)
@@ -456,7 +552,14 @@ def main() -> None:
         elif args.command == "task-info":
             cmd_task_info(client, args.task_id)
         elif args.command == "rounds":
-            cmd_rounds(client, args.task_id, args.limit, args.color)
+            cmd_rounds(
+                client,
+                args.task_id,
+                args.limit,
+                args.all,
+                args.turn,
+                args.color,
+            )
         elif args.command == "task-stop":
             cmd_task_stop(client, args.task_id)
         elif args.command == "task-delete":

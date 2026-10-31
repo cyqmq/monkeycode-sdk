@@ -1,5 +1,22 @@
 # 更新日志
 
+## [1.11.0] - 2026-10-31
+
+### 新增
+- CLI `rounds` 支持 `--all`（分页拉取全部）、`--turn N`（只看指定轮次）、按 turn 折叠输出
+- `round_tool_title(data)`：提取工具调用事件的工具名称
+- 轮次解码脱敏：`call`/`call-response` 等事件中的 `execution_config.envs`、api_key/token/secret/password 等字段自动打码为 `***`，不再泄露到终端
+- `agent_thought_chunk`（思考）、`usage_update`（用量）、`call`/`call-response`（调用/调用响应）分类与精简展示
+
+### 改进
+- `format_round_text` 对 `available_commands_update`/`tool_call` 返回纯内容（不再带「[可用命令更新]」「[工具调用]」前缀，避免与标签重复）
+- CLI `rounds` 去重：连续相同的「命令更新」只显示一次；同一 turn 同一工具的状态流转（pending/in_progress/completed）只保留最后一条
+- `group_models` 默认过滤 `is_hidden=true` 并按 id 去重（与平台页面一致）；CLI `list-models` 不再末尾重复刷「付费模型」整表
+- CLI `run` 只从可见模型（我的/基础/专业/旗舰）中选第一个，不再误选隐藏模型
+- CLI `send-msg` 使用 `format_round_text` + `round_label` 输出
+- 会话过期自动重登缺少环境变量时，给出明确提示（先提示复用会话，失效时提示设置环境变量或 `python3 cli.py login`）
+- 文档命令统一为 `python3 cli.py`
+
 ## [1.10.0] - 2026-10-31
 
 ### 新增

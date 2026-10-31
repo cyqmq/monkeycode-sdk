@@ -164,6 +164,40 @@ def _try_b64(s: str) -> str | None:
         return None
 
 
+_SENSITIVE_KEYWORDS = (
+    "api_key",
+    "apikey",
+    "access_key",
+    "secret",
+    "password",
+    "passwd",
+    "token",
+    "authorization",
+    "cookie",
+    "env",
+    "credential",
+)
+
+
+def _redact_sensitive(value: Any) -> Any:
+    """递归脱敏：密钥类字段（api_key/token/secret/password/env 等）值替换为 ***。"""
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for k, v in value.items():
+            kl = str(k).lower()
+            if any(word in kl for word in _SENSITIVE_KEYWORDS) and v not in (None, ""):
+                if kl == "envs" and isinstance(v, dict):
+                    out[k] = {"***": "***"}
+                else:
+                    out[k] = "***"
+            else:
+                out[k] = _redact_sensitive(v)
+        return out
+    if isinstance(value, list):
+        return [_redact_sensitive(v) for v in value]
+    return value
+
+
 def _coerce_round_payload(data: Any) -> Any:
     """把 rounds chunk 的 data 规范成 dict/str。"""
     if data is None:
@@ -236,8 +270,8 @@ def format_round_text(data: Any, max_len: int = 400) -> str:
                 if isinstance(c, dict) and c.get("name")
             ][:10]
             if names:
-                return f"[可用命令更新] {'、'.join(names)}"
-            return f"[可用命令更新] 共 {len(cmds)} 项"
+                return "、".join(names)[:max_len]
+            return f"共 {len(cmds)} 项"
         if session_update in ("agent_message", "agent_message_chunk"):
             msg = (
                 _extract_text_field(src.get("message"))
@@ -246,23 +280,44 @@ def format_round_text(data: Any, max_len: int = 400) -> str:
                 or _extract_text_field(update.get("content"))
             )
             return msg[:max_len]
+        if session_update == "agent_thought_chunk":
+            thought = _extract_text_field(src.get("thought"))
+            if not thought:
+                thought = _extract_text_field(src.get("content"))
+            return thought[:max_len] if thought else "（思考中）"
+        if session_update == "usage_update":
+            usage = src.get("usage") or update.get("usage") or {}
+            if isinstance(usage, dict):
+                total = (
+                    usage.get("totalTokens")
+                    or usage.get("total_tokens")
+                    or usage.get("total")
+                    or ""
+                )
+                if total:
+                    return f"用量：{total}"
+            return "用量更新"
         if session_update in ("tool_call", "tool_call_update"):
             title = src.get("title") or src.get("kind") or src.get("toolName") or ""
             status = src.get("status") or ""
-            extra = " ".join(str(x) for x in (title, status) if x)
-            if extra:
-                return f"[工具调用] {extra}"[:max_len]
-            return f"[工具调用] {json.dumps(src, ensure_ascii=False)[:300]}"
+            return f"{title} {status}".strip()[:max_len]
+        if session_update in ("call", "call-response"):
+            title = src.get("title") or src.get("toolName") or src.get("kind") or ""
+            status = src.get("status") or ""
+            if title:
+                return f"{title} {status}".strip()[:max_len]
+            safe = _redact_sensitive(src)
+            return json.dumps(safe, ensure_ascii=False)[:max_len]
         return (
-            f"[{session_update}] "
-            f"{json.dumps(src, ensure_ascii=False)[:300]}"
+            f"{session_update} "
+            f"{json.dumps(_redact_sensitive(src), ensure_ascii=False)[:300]}"
         )
 
     for key in ("content", "message", "text"):
         extracted = _extract_text_field(obj.get(key))
         if extracted:
             return extracted[:max_len]
-    return json.dumps(obj, ensure_ascii=False)[:max_len]
+    return json.dumps(_redact_sensitive(obj), ensure_ascii=False)[:max_len]
 
 
 def _round_session_update(data: Any) -> str:
@@ -279,10 +334,12 @@ def round_kind(data: Any, event: str | None = None) -> str:
     su = _round_session_update(data)
     if su == "available_commands_update":
         return "commands"
-    if su in ("agent_message", "agent_message_chunk"):
+    if su in ("agent_message", "agent_message_chunk", "agent_thought_chunk"):
         return "agent"
-    if su in ("tool_call", "tool_call_update"):
+    if su in ("tool_call", "tool_call_update", "call", "call-response"):
         return "tool"
+    if su == "usage_update":
+        return "system"
     obj = _coerce_round_payload(data)
     ctype = ""
     if isinstance(obj, dict):
@@ -304,8 +361,16 @@ def round_label(data: Any, event: str | None = None) -> str:
         return "命令更新"
     if su in ("agent_message", "agent_message_chunk"):
         return "Agent"
+    if su == "agent_thought_chunk":
+        return "思考"
+    if su == "usage_update":
+        return "用量"
     if su in ("tool_call", "tool_call_update"):
         return "工具"
+    if su == "call":
+        return "调用"
+    if su == "call-response":
+        return "调用响应"
     obj = _coerce_round_payload(data)
     ctype = ""
     if isinstance(obj, dict):
@@ -320,6 +385,16 @@ def round_label(data: Any, event: str | None = None) -> str:
     if ctype == "message":
         return "消息"
     return event or su or ctype or "事件"
+
+
+def round_tool_title(data: Any) -> str:
+    """提取工具调用事件的工具名称（tool_call/call 等）。"""
+    obj = _coerce_round_payload(data)
+    if not isinstance(obj, dict):
+        return ""
+    update = obj.get("update") if isinstance(obj.get("update"), dict) else {}
+    src = update if update.get("sessionUpdate") else obj
+    return str(src.get("title") or src.get("toolName") or src.get("kind") or "")
 
 
 class TaskStream:
