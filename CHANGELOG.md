@@ -1,5 +1,21 @@
 # 更新日志
 
+## [1.13.0] - 2026-10-31
+
+### 修复
+- **wallet-tx 方向判断**：`inout_type` 为空时回退到 `kind` 字段判断收支方向，签到奖励不再显示为 `[-]`
+- **rounds 密钥泄露**：`config_files.content` 是内嵌 JSON 字符串（如 auth.json），`_redact_sensitive` 现在会解析嵌套 JSON 并递归脱敏，不再泄露 `key`/`api_key` 等值
+- **links 提取噪音**：过滤 `.well-known` 探测 URL 和截断的 percent-encoding URL（如 `%E5%8A` 结尾）
+- **list-available-models 总数不一致**：分组显示过滤后数量，末尾注明隐藏数量（如「共 14 个（另有 12 个已隐藏）」）
+- **`_request` 非 JSON 响应**：`resp.json()` 失败时捕获 `json.JSONDecodeError` / `UnicodeDecodeError`，不再 traceback
+- **interactive_login 异常**：`client.login()` 抛出 `CaptchaRequiredError` / `APIError` 时打印友好错误，不再 traceback
+
+### 改进
+- `_status_zh` 新增 `finished` → 已完成
+- `cmd_wallet` 人类可读：余额换算为「点」，显示订阅计划
+- `cmd_whoami` 人类可读：邮箱 / 用户 ID / 订阅计划
+- `cmd_terminal` 补充 `title` 和 `connected_count` 字段
+
 ## [1.12.0] - 2026-10-31
 
 ### 新增

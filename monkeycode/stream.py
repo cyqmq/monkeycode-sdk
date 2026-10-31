@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import re
 from typing import Any
 
 import websockets
@@ -164,28 +165,23 @@ def _try_b64(s: str) -> str | None:
         return None
 
 
-_SENSITIVE_KEYWORDS = (
-    "api_key",
-    "apikey",
-    "access_key",
-    "secret",
-    "password",
-    "passwd",
-    "token",
-    "authorization",
-    "cookie",
-    "env",
-    "credential",
+_SENSITIVE_RE = re.compile(
+    r"api[_-]?key|apikey|access[_-]?key|secret|password|passwd|token"
+    r"|authorization|cookie|env|credential|\bkey\b",
+    re.IGNORECASE,
 )
 
 
 def _redact_sensitive(value: Any) -> Any:
-    """递归脱敏：密钥类字段（api_key/token/secret/password/env 等）值替换为 ***。"""
+    """递归脱敏：密钥类字段（api_key/token/secret/password/env 等）值替换为 ***。
+
+    字符串值如果是 JSON 文本（如 config_files.content），会先解析再递归脱敏。
+    """
     if isinstance(value, dict):
         out: dict[str, Any] = {}
         for k, v in value.items():
             kl = str(k).lower()
-            if any(word in kl for word in _SENSITIVE_KEYWORDS) and v not in (None, ""):
+            if _SENSITIVE_RE.search(kl) and v not in (None, ""):
                 if kl == "envs" and isinstance(v, dict):
                     out[k] = {"***": "***"}
                 else:
@@ -195,6 +191,16 @@ def _redact_sensitive(value: Any) -> Any:
         return out
     if isinstance(value, list):
         return [_redact_sensitive(v) for v in value]
+    if isinstance(value, str):
+        stripped = value.lstrip()
+        if stripped and stripped[0] in ("{", "["):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, (dict, list)):
+                    return json.dumps(_redact_sensitive(parsed), ensure_ascii=False)
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return value
     return value
 
 

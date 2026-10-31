@@ -77,6 +77,12 @@ def _is_junk(url: str) -> bool:
         return True
     if url.endswith(":\\") or url.endswith(":/"):
         return True
+    # .well-known 探测/状态检测 URL
+    if ".well-known" in url:
+        return True
+    # 截断的 percent-encoding：%E5%8A 后面的 % 不完整（少于 2 位十六进制）
+    if re.search(r"%[0-9A-Fa-f]{0,1}$", url):
+        return True
     return False
 
 

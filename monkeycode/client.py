@@ -2155,7 +2155,7 @@ class MonkeyCodeClient:
 
         try:
             body = resp.json()
-        except ValueError:
+        except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
             if resp.status_code != 200:
                 raise APIError(f"HTTP {resp.status_code}: {resp.text[:200]}")
             return resp.text

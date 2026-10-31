@@ -232,6 +232,27 @@ def test_round_kind_and_label_classify() -> None:
     assert round_label(plain, "some-event") == "some-event"
 
 
+def test_redact_sensitive_nested_json_string() -> None:
+    from monkeycode.stream import _redact_sensitive
+
+    # config_files.content 是内嵌 JSON 字符串，应解析后脱敏
+    payload = {
+        "config_files": [
+            {
+                "path": "~/.local/share/opencode/auth.json",
+                "content": json.dumps(
+                    {"key": "125cb3d5-secret-token", "opencode_api_key": "sk-abc"}
+                ),
+            }
+        ]
+    }
+    out = _redact_sensitive(payload)
+    content = out["config_files"][0]["content"]
+    assert "125cb3d5-secret-token" not in content
+    assert "sk-abc" not in content
+    assert "key" in content
+
+
 def test_redact_sensitive_public_alias() -> None:
     from monkeycode.stream import redact_sensitive
 

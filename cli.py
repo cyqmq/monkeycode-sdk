@@ -82,6 +82,7 @@ def _status_zh(status: str) -> str:
         "processing": "处理中",
         "running": "运行中",
         "completed": "已完成",
+        "finished": "已完成",
         "success": "成功",
         "error": "失败",
         "failed": "失败",
@@ -140,7 +141,7 @@ def interactive_login(client: MonkeyCodeClient) -> None:
     try:
         client.login()
         print("登录成功")
-    except AuthenticationError as e:
+    except Exception as e:
         print(f"登录失败：{e}")
         sys.exit(1)
 
@@ -206,8 +207,18 @@ def cmd_links(client: MonkeyCodeClient, task_id: str) -> None:
 
 
 def cmd_whoami(client: MonkeyCodeClient) -> None:
-    """显示当前登录账户信息。"""
-    print_json(client.whoami())
+    """显示当前登录账户信息（人类可读格式）。"""
+    data = client.whoami()
+    if not isinstance(data, dict):
+        print_json(data)
+        return
+    user = data.get("user") or data.get("data") or data
+    email = user.get("email") or user.get("username") or "-"
+    uid = user.get("id") or "-"
+    plan = user.get("plan") or data.get("plan") or "-"
+    print(f"邮箱：{email}")
+    print(f"用户 ID：{uid}")
+    print(f"订阅计划：{plan}")
 
 
 def cmd_logout(client: MonkeyCodeClient) -> None:
@@ -378,8 +389,25 @@ def cmd_send_msg(client: MonkeyCodeClient, task_id: str, content: str) -> None:
 
 
 def cmd_wallet(client: MonkeyCodeClient) -> None:
-    """查看钱包余额。"""
-    print_json(client.get_wallet())
+    """查看钱包余额（人类可读格式）。"""
+    data = client.get_wallet()
+    if not isinstance(data, dict):
+        print_json(data)
+        return
+    balance = data.get("balance") or data.get("balance_point") or 0
+    try:
+        bal_int = int(balance)
+        points = bal_int / 1000
+        print(f"余额：{points} 点（原始 {bal_int}）")
+    except (TypeError, ValueError):
+        print(f"余额：{balance}")
+    extra = {
+        k: v
+        for k, v in data.items()
+        if k not in ("balance", "balance_point", "id")
+    }
+    if extra:
+        print("其他：", json.dumps(extra, ensure_ascii=False, default=str))
 
 
 def cmd_checkin(client: MonkeyCodeClient) -> None:
@@ -405,17 +433,22 @@ def cmd_wallet_tx(client: MonkeyCodeClient) -> None:
         except (TypeError, ValueError):
             amount = tx.get("amount") or 0
         points = amount / 1000 if isinstance(amount, int) else amount
+        # 方向字段优先取 inout_type，其次 kind，最后 type/direction
         inout = str(
-            tx.get("inout_type") or tx.get("type") or tx.get("direction") or ""
+            tx.get("inout_type")
+            or tx.get("kind")
+            or tx.get("type")
+            or tx.get("direction")
+            or ""
         ).lower()
         if inout in ("in", "income", "recharge", "add", "checkin"):
             sign, io = "+", "收入"
-        elif inout in ("out", "expense", "consume", "subtract"):
+        elif inout in ("out", "expense", "consume", "subtract", "checkin_reward"):
             sign, io = "-", "支出"
         else:
             sign, io = "", (inout or "-")
         remark = str(
-            tx.get("remark") or tx.get("description") or tx.get("kind") or ""
+            tx.get("remark") or tx.get("description") or ""
         )[:40]
         created = _fmt_ts(tx.get("created_at") or tx.get("time"))
         print(f"[{io}] {sign}{points} 点  {created}  {remark}")
@@ -479,12 +512,18 @@ def cmd_terminal(client: MonkeyCodeClient, vm_id: str) -> None:
             or s.get("session_id")
             or ""
         )
+        title = s.get("title") or ""
         status = s.get("status") or s.get("state") or ""
         mode = s.get("mode") or s.get("share_mode") or ""
+        connected = s.get("connected_count") or s.get("connected") or ""
         created = _fmt_ts(s.get("created_at") or s.get("create_time"))
         parts = [f"terminal={sid}"]
+        if title:
+            parts.append(f"标题={title}")
         if status:
             parts.append(_status_zh(status))
+        if connected:
+            parts.append(f"连接数={connected}")
         if mode:
             parts.append(f"模式={mode}")
         if created != "-":
@@ -572,8 +611,10 @@ def cmd_list_available_models(client: MonkeyCodeClient) -> None:
         ("ultra", "旗舰模型"),
         ("other", "其他"),
     )
+    visible_total = 0
     for key, label in group_labels:
         items = groups.get(key) or []
+        visible_total += len(items)
         if not items:
             continue
         print(f"【{label}】{len(items)} 个")
@@ -581,7 +622,11 @@ def cmd_list_available_models(client: MonkeyCodeClient) -> None:
             name = m.get("model") or m.get("name") or m.get("id") or ""
             paid = "" if m.get("is_free") else " [付费]"
             print(f"  · {name}{paid}")
-    print(f"可用模型共 {len(models)} 个")
+    hidden = len(models) - visible_total
+    if hidden:
+        print(f"可用模型共 {visible_total} 个（另有 {hidden} 个已隐藏）")
+    else:
+        print(f"可用模型共 {visible_total} 个")
 
 
 def cmd_list_model_providers(

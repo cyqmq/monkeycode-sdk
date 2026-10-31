@@ -61,6 +61,23 @@ def test_clean_url_trailing_backslash() -> None:
     assert _clean_url("http://localhost:8000\\\\") == "http://localhost:8000"
 
 
+def test_extract_filters_well_known() -> None:
+    raw = b64(
+        json.dumps(
+            {"data": "https://monkeycode-ai.online/.well-known/mcai-preview-connect-status-detect"}
+        )
+    )
+    chunk = {"data": raw}
+    assert extract_urls_from_chunk(chunk) == []
+
+
+def test_extract_filters_truncated_percent() -> None:
+    # 截断的 percent-encoding：%E 只有 1 位十六进制
+    raw = b64(json.dumps({"data": "https://monkeycode-ai.online/%E6%8E%A2%E"}))
+    chunk = {"data": raw}
+    assert extract_urls_from_chunk(chunk) == []
+
+
 # ---------- extract_urls_from_chunk ----------
 
 def test_extract_from_base64_json_data() -> None:
