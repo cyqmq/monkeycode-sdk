@@ -1,5 +1,10 @@
 # 更新日志
 
+## [1.16.0] - 2026-10-31
+
+### 修复
+- **list-model-providers 端点契约结论**：前端 `getProviderModelList` 实测只传 `{api_key, base_url, provider}`（无 `model_id`），且平台端点 `/api/v1/users/models/providers` 对任意客户端输入（含前端自身参数、34 种参数名、GET/POST/PUT、路径变体、任意 model_id 值）都返回「模型ID必填（code=10300）」——**是平台端点本身的问题**，前端「获取模型列表」同样失败。回退 `model_id` 查询参数假设（该参数非契约、服务端不读取），code=10300 的友好错误提示改为说明端点不可用并给出替代方案（`list_available_models` / 平台模型管理页）
+
 ## [1.15.0] - 2026-10-31
 
 ### 修复

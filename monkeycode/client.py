@@ -58,6 +58,8 @@ _RETRY_BASE_DELAY = 1.0
 _FRIENDLY_ERRORS: dict[int, str] = {
     10606: "邮箱或密码错误",
     10205: "云端宿主不可调度，请到控制台检查云端环境",
+    10300: "平台「模型供应商」端点当前不可用（对任意输入都返回该错误），"
+    "请改用 list_available_models 或在平台模型管理页手动添加模型",
 }
 
 
@@ -400,7 +402,6 @@ class MonkeyCodeClient:
         base_url: str,
         api_key: str,
         api_header: str | None = None,
-        model_id: str | None = None,
     ) -> Any:
         """列出模型供应商的模型列表。
 
@@ -408,8 +409,9 @@ class MonkeyCodeClient:
         Moonshot / AzureOpenAI / BaiZhiCloud / Hunyuan / BaiLian /
         Volcengine / Gemini / Other。
 
-        服务端 /api/v1/users/models/providers 需要 model_id（模型配置 ID），
-        可在调用前先用 create_model 创建配置获取，或从 list_models 中取。
+        注意：平台 /api/v1/users/models/providers 端点目前对任意客户端
+        输入都返回「模型ID必填（code=10300）」（前端同样失败），本方法
+        实际不可用；请改用 list_available_models 或在平台模型管理页添加。
         """
         params: dict[str, Any] = {
             "provider": provider,
@@ -418,8 +420,6 @@ class MonkeyCodeClient:
         }
         if api_header:
             params["api_header"] = api_header
-        if model_id:
-            params["model_id"] = model_id
         return self._request(
             "GET", "/api/v1/users/models/providers", params=params
         )

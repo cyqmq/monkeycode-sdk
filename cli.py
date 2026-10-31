@@ -673,29 +673,18 @@ def cmd_list_model_providers(
     base_url: str,
     api_key: str,
     api_header: str | None = None,
-    model_id: str | None = None,
 ) -> None:
     """列出模型供应商的模型列表。
 
-    服务端要求 model_id（模型配置 ID）；未提供时尝试从已有模型配置中
-    自动匹配同 provider 的一个。
+    注意：平台端点 /models/providers 当前对任意输入都返回
+    「模型ID必填（code=10300）」，本命令实际不可用；改用 list_available_models。
     """
-    if not model_id:
-        try:
-            for m in client.list_models():
-                if str(m.get("provider") or "").lower() == provider.lower():
-                    model_id = str(m.get("id") or m.get("model_id") or "")
-                    if model_id:
-                        break
-        except Exception:
-            model_id = None
     try:
         data = client.list_model_providers(
             provider=provider,
             base_url=base_url,
             api_key=api_key,
             api_header=api_header,
-            model_id=model_id,
         )
     except APIError as e:
         print(f"❌ 获取模型列表失败：{e}")
@@ -754,7 +743,6 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
                 args.provider_base_url,
                 args.api_key,
                 args.api_header,
-                args.model_id,
             )
         elif args.command == "list-tasks":
             cmd_list_tasks(client, args.limit, args.full)
@@ -834,12 +822,11 @@ def main() -> None:
     sub.add_parser("list-images", help="列出镜像")
     sub.add_parser("list-models", help="列出模型")
     sub.add_parser("list-available-models", help="列出可用模型")
-    lm_p = sub.add_parser("list-model-providers", help="列出模型供应商的模型列表")
+    lm_p = sub.add_parser("list-model-providers", help="列出模型供应商的模型列表（平台端点当前不可用）")
     lm_p.add_argument("provider", help="供应商：SiliconFlow/OpenAI/Ollama/DeepSeek 等")
     lm_p.add_argument("provider_base_url", help="供应商 Base URL（如 https://api.deepseek.com）")
     lm_p.add_argument("api_key", help="API Key")
     lm_p.add_argument("--api-header", default=None, help="API 请求头")
-    lm_p.add_argument("--model-id", default=None, help="模型配置 ID（服务端必填，缺省时自动匹配已有模型）")
     tasks_p = sub.add_parser("list-tasks", help="列出最近任务（含时间）")
     tasks_p.add_argument("--limit", type=int, default=10, help="条数，默认 10")
     tasks_p.add_argument("--full", action="store_true", help="显示完整任务内容")
