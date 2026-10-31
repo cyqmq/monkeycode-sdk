@@ -1,7 +1,7 @@
 # monkeycode-sdk
 
-MonkeyCode 云平台 REST API 的 Python SDK。用于在任意 Python 项目/聊天框架（AstrBot、NoneBot 等）中：
-认证登录 → 创建 AI 编程任务 → 轮询结果，让机器人像人一样使用 MonkeyCode。
+MonkeyCode 云平台 REST API 的 Python SDK：认证登录、任务调度、WebSocket 实时会话、
+文件/终端管理、配置管理与团队控制面，覆盖平台完整 API，并附命令行工具（CLI）。
 
 **特性**
 - 密码登录 / 团队登录 / PoW 验证码全自动求解
