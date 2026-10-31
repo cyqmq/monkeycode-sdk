@@ -11,6 +11,8 @@ from monkeycode.stream import (
     decode_chunk,
     encode_user_input,
     format_round_text,
+    round_kind,
+    round_label,
 )
 
 
@@ -120,6 +122,50 @@ def test_format_round_text_tool_call() -> None:
     text = format_round_text(payload)
     assert text.startswith("[工具调用]")
     assert "Read App.vue" in text
+
+
+def test_round_kind_and_label_classify() -> None:
+    commands = {
+        "sessionId": "ses_1",
+        "update": {
+            "sessionUpdate": "available_commands_update",
+            "availableCommands": [{"name": "customize-opencode"}],
+        },
+    }
+    assert round_kind(commands) == "commands"
+    assert round_label(commands) == "命令更新"
+
+    agent = {
+        "update": {
+            "sessionUpdate": "agent_message_chunk",
+            "content": {"type": "text", "text": "正在查看"},
+        },
+    }
+    assert round_kind(agent) == "agent"
+    assert round_label(agent) == "Agent"
+
+    tool = {
+        "update": {
+            "sessionUpdate": "tool_call",
+            "title": "Read",
+            "kind": "read",
+            "status": "completed",
+        },
+    }
+    assert round_kind(tool) == "tool"
+    assert round_label(tool) == "工具"
+
+    user = {"type": "user-input", "content": "继续"}
+    assert round_kind(user) == "user"
+    assert round_label(user) == "用户输入"
+
+    ended = {"type": "task-ended", "data": ""}
+    assert round_kind(ended) == "system"
+    assert round_label(ended) == "任务结束"
+
+    plain = "hello"
+    assert round_kind(plain) == "other"
+    assert round_label(plain, "some-event") == "some-event"
 
 
 # ---------- 连接异常包装 ----------

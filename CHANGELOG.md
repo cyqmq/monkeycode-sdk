@@ -1,5 +1,12 @@
 # 更新日志
 
+## [1.9.0] - 2026-10-31
+
+### 新增
+- `round_kind(data, event=None)`：返回轮次语义分类（user / agent / tool / system / commands / other）
+- `round_label(data, event=None)`：返回轮次友好中文标签（用户输入 / 任务开始 / 任务结束 / Agent / 工具 / 命令更新）
+- CLI `rounds --color`：用 ANSI 颜色区分事件类型；默认输出中文标签
+
 ## [1.8.0] - 2026-10-31
 
 ### 新增

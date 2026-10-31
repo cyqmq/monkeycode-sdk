@@ -33,7 +33,7 @@ python cli.py send-msg <task_id> "继续"       # 向运行中的任务发送消
 python cli.py links <task_id>                 # 列出任务预览链接及存活状态
 python cli.py switch-model <task_id> <model_id>  # 切换运行中任务的模型
 python cli.py restart <task_id>               # 重启任务
-python cli.py rounds <task_id> [--limit 20]   # 查看执行轮次（解码后按 turn_seq 打印）
+python cli.py rounds <task_id> [--limit 20] [--color]  # 查看执行轮次（解码后按 turn_seq 打印；--color 用 ANSI 颜色区分事件类型）
 ```
 
 ## 环境 / 项目

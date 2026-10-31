@@ -27,7 +27,11 @@ from monkeycode import (
     TaskError,
 )
 from monkeycode.models import RepoReq
-from monkeycode.stream import format_round_text
+from monkeycode.stream import (
+    format_round_text,
+    round_kind,
+    round_label,
+)
 
 
 def default_session_path() -> str:
@@ -132,8 +136,20 @@ def cmd_task_info(client: MonkeyCodeClient, task_id: str) -> None:
     print_json(client.get_task(task_id).raw)
 
 
-def cmd_rounds(client: MonkeyCodeClient, task_id: str, limit: int = 20) -> None:
-    """打印任务轮次：解码后按 turn_seq 排序。"""
+_KIND_COLORS = {
+    "user": "34",
+    "agent": "35",
+    "tool": "36",
+    "system": "33",
+    "commands": "90",
+    "other": "0",
+}
+
+
+def cmd_rounds(
+    client: MonkeyCodeClient, task_id: str, limit: int = 20, color: bool = False
+) -> None:
+    """打印任务轮次：解码后按 turn_seq 排序，用标签区分事件类型。"""
     data = client.get_task_rounds(task_id, limit=limit)
     chunks = data.get("chunks") if isinstance(data, dict) else (data or [])
     chunks = sorted(
@@ -149,9 +165,16 @@ def cmd_rounds(client: MonkeyCodeClient, task_id: str, limit: int = 20) -> None:
     for c in chunks:
         event = c.get("event") or c.get("kind") or c.get("type") or "unknown"
         seq = c.get("turn_seq")
+        raw = c.get("data", "")
+        kind = round_kind(raw, event)
+        label = round_label(raw, event)
+        text = format_round_text(raw)
         prefix = f"turn={seq} " if seq is not None else ""
-        text = format_round_text(c.get("data", ""))
-        print(f"{prefix}[{event}] {text}")
+        if color:
+            code = _KIND_COLORS.get(kind, "0")
+            print(f"{prefix}\033[{code}m[{label}]\033[0m {text}")
+        else:
+            print(f"{prefix}[{label}] {text}")
 
 
 def cmd_task_stop(client: MonkeyCodeClient, task_id: str) -> None:
@@ -322,6 +345,7 @@ def main() -> None:
     rounds_p = sub.add_parser("rounds", help="查看任务执行轮次（解码后按 turn_seq 打印）")
     rounds_p.add_argument("task_id", help="任务 ID")
     rounds_p.add_argument("--limit", type=int, default=20, help="拉取条数，默认 20")
+    rounds_p.add_argument("--color", action="store_true", help="用 ANSI 颜色区分事件类型")
 
     stop_p = sub.add_parser("task-stop", help="停止任务")
     stop_p.add_argument("task_id", help="任务 ID")
@@ -404,7 +428,7 @@ def main() -> None:
         elif args.command == "task-info":
             cmd_task_info(client, args.task_id)
         elif args.command == "rounds":
-            cmd_rounds(client, args.task_id, args.limit)
+            cmd_rounds(client, args.task_id, args.limit, args.color)
         elif args.command == "task-stop":
             cmd_task_stop(client, args.task_id)
         elif args.command == "task-delete":

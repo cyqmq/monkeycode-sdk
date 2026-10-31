@@ -265,6 +265,63 @@ def format_round_text(data: Any, max_len: int = 400) -> str:
     return json.dumps(obj, ensure_ascii=False)[:max_len]
 
 
+def _round_session_update(data: Any) -> str:
+    """提取轮次载荷中的 ACP sessionUpdate 类型。"""
+    obj = _coerce_round_payload(data)
+    if not isinstance(obj, dict):
+        return ""
+    update = obj.get("update") if isinstance(obj.get("update"), dict) else {}
+    return str(obj.get("sessionUpdate") or update.get("sessionUpdate") or "")
+
+
+def round_kind(data: Any, event: str | None = None) -> str:
+    """返回轮次语义分类：user/agent/tool/system/commands/other。"""
+    su = _round_session_update(data)
+    if su == "available_commands_update":
+        return "commands"
+    if su in ("agent_message", "agent_message_chunk"):
+        return "agent"
+    if su in ("tool_call", "tool_call_update"):
+        return "tool"
+    obj = _coerce_round_payload(data)
+    ctype = ""
+    if isinstance(obj, dict):
+        ctype = str(obj.get("type") or obj.get("event") or obj.get("kind") or "")
+    ctype = ctype.lower() or (event or "").lower()
+    if ctype == "user-input":
+        return "user"
+    if "task-started" in ctype or "task-ended" in ctype or "task-failed" in ctype:
+        return "system"
+    if ctype == "message":
+        return "agent"
+    return "other"
+
+
+def round_label(data: Any, event: str | None = None) -> str:
+    """返回轮次友好中文标签（与前端后台一致）。"""
+    su = _round_session_update(data)
+    if su == "available_commands_update":
+        return "命令更新"
+    if su in ("agent_message", "agent_message_chunk"):
+        return "Agent"
+    if su in ("tool_call", "tool_call_update"):
+        return "工具"
+    obj = _coerce_round_payload(data)
+    ctype = ""
+    if isinstance(obj, dict):
+        ctype = str(obj.get("type") or obj.get("event") or obj.get("kind") or "")
+    ctype = ctype.lower() or (event or "").lower()
+    if ctype == "user-input":
+        return "用户输入"
+    if ctype == "task-started":
+        return "任务开始"
+    if ctype == "task-ended":
+        return "任务结束"
+    if ctype == "message":
+        return "消息"
+    return event or su or ctype or "事件"
+
+
 class TaskStream:
     """任务实时流（WebSocket 会话）。
 
