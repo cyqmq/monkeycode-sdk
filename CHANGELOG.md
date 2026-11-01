@@ -1,5 +1,13 @@
 # 更新日志
 
+## [1.19.0] - 2026-11-01
+
+### 新增
+- **CLI Git 身份管理**：`git-identity-list` / `git-identity-add` / `git-identity-update` / `git-identity-delete`（覆盖 SDK 的 Git 身份 CRUD，此前仅 Python API 可用，与 MCP 管理同一缺口）
+
+### 变更
+- `wallet-tx` 对 MCP 工具消费标注「按次计费」（单价无 API 端点，前端控制台 badge 使用前展示，SDK 仅使用后经 amount/1000 得知）
+
 ## [1.18.0] - 2026-10-31
 
 ### 新增

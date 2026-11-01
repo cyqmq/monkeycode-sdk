@@ -719,6 +719,112 @@ def cmd_mcp_tool(client: MonkeyCodeClient, tool_id: str, enabled: bool) -> None:
     print_json(result)
 
 
+def _git_identity_line(g: dict) -> str:
+    gid = str(g.get("id") or "")
+    username = str(g.get("username") or gid)
+    email = str(g.get("email") or "")
+    platform = str(g.get("platform") or "")
+    base_url = str(g.get("base_url") or "")
+    remark = str(g.get("remark") or "")
+    parts = [f"{username} ({gid})"]
+    if email:
+        parts.append(email)
+    if platform:
+        parts.append(platform)
+    if base_url:
+        parts.append(base_url[:40])
+    if remark:
+        parts.append(remark[:30])
+    if g.get("is_default"):
+        parts.append("默认")
+    return " | ".join(parts)
+
+
+def cmd_git_identity_list(client: MonkeyCodeClient) -> None:
+    """列出 Git 身份。"""
+    data = client.list_git_identities()
+    items = (
+        data.get("identities")
+        or data.get("list")
+        or data.get("items")
+        or (data if isinstance(data, list) else [])
+    )
+    if not items:
+        print("暂无 Git 身份。")
+        return
+    for g in items or []:
+        if isinstance(g, dict):
+            print(_git_identity_line(g))
+        else:
+            print_json(g)
+
+
+def cmd_git_identity_add(
+    client: MonkeyCodeClient,
+    access_token: str,
+    base_url: str,
+    email: str,
+    platform: str,
+    username: str,
+    remark: str | None,
+    organization_id: str | None,
+) -> None:
+    """添加 Git 身份。"""
+    result = client.add_git_identity(
+        access_token=access_token,
+        base_url=base_url,
+        email=email,
+        platform=platform,
+        username=username,
+        remark=remark,
+        organization_id=organization_id,
+    )
+    print_json(result)
+
+
+def cmd_git_identity_update(
+    client: MonkeyCodeClient,
+    identity_id: str,
+    access_token: str | None,
+    base_url: str | None,
+    email: str | None,
+    platform: str | None,
+    username: str | None,
+    remark: str | None,
+    organization_id: str | None,
+) -> None:
+    """更新 Git 身份。"""
+    fields: dict[str, Any] = {}
+    if access_token:
+        fields["access_token"] = access_token
+    if base_url:
+        fields["base_url"] = base_url
+    if email:
+        fields["email"] = email
+    if platform:
+        fields["platform"] = platform
+    if username:
+        fields["username"] = username
+    if remark is not None:
+        fields["remark"] = remark
+    if organization_id is not None:
+        fields["organization_id"] = organization_id
+    if not fields:
+        print("未提供任何要更新的字段。")
+        return
+    result = client.update_git_identity(identity_id, **fields)
+    print_json(result)
+
+
+def cmd_git_identity_delete(client: MonkeyCodeClient, identity_id: str) -> None:
+    """删除 Git 身份。"""
+    result = client.delete_git_identity(identity_id)
+    if result is None or result == {}:
+        print(f"已删除 Git 身份：{identity_id}")
+    else:
+        print_json(result)
+
+
 def cmd_list_models(client: MonkeyCodeClient) -> None:
     """列出模型并按页面分类分组显示（每条已标注是否付费）。"""
     models = client.list_models()
@@ -856,6 +962,33 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
             cmd_mcp_sync(client, args.upstream_id)
         elif args.command == "mcp-tool":
             cmd_mcp_tool(client, args.tool_id, args.enabled == "on")
+        elif args.command == "git-identity-list":
+            cmd_git_identity_list(client)
+        elif args.command == "git-identity-add":
+            cmd_git_identity_add(
+                client,
+                args.access_token,
+                args.base_url,
+                args.email,
+                args.platform,
+                args.username,
+                args.remark,
+                args.organization_id,
+            )
+        elif args.command == "git-identity-update":
+            cmd_git_identity_update(
+                client,
+                args.identity_id,
+                args.access_token,
+                args.base_url,
+                args.email,
+                args.platform,
+                args.username,
+                args.remark,
+                args.organization_id,
+            )
+        elif args.command == "git-identity-delete":
+            cmd_git_identity_delete(client, args.identity_id)
         elif args.command == "list-models":
             cmd_list_models(client)
         elif args.command == "list-available-models":
@@ -1039,6 +1172,26 @@ def main() -> None:
     mcp_t = sub.add_parser("mcp-tool", help="启用/关闭 MCP 工具")
     mcp_t.add_argument("tool_id", help="工具 ID")
     mcp_t.add_argument("enabled", choices=["on", "off"], help="on=启用 off=关闭")
+    sub.add_parser("git-identity-list", help="列出 Git 身份")
+    gia = sub.add_parser("git-identity-add", help="添加 Git 身份")
+    gia.add_argument("access_token", help="访问令牌")
+    gia.add_argument("base_url", help="仓库地址（如 https://github.com）")
+    gia.add_argument("email", help="Git 提交邮箱")
+    gia.add_argument("platform", help="平台（github/gitlab 等）")
+    gia.add_argument("username", help="用户名")
+    gia.add_argument("--remark", default=None, help="备注")
+    gia.add_argument("--organization-id", default=None, help="组织 ID")
+    giu = sub.add_parser("git-identity-update", help="更新 Git 身份")
+    giu.add_argument("identity_id", help="身份 ID")
+    giu.add_argument("--access-token", default=None, help="新访问令牌")
+    giu.add_argument("--base-url", default=None, help="新仓库地址")
+    giu.add_argument("--email", default=None, help="新提交邮箱")
+    giu.add_argument("--platform", default=None, help="新平台")
+    giu.add_argument("--username", default=None, help="新用户名")
+    giu.add_argument("--remark", default=None, help="新备注")
+    giu.add_argument("--organization-id", default=None, help="新组织 ID")
+    gid = sub.add_parser("git-identity-delete", help="删除 Git 身份")
+    gid.add_argument("identity_id", help="身份 ID")
     sub.add_parser("list-models", help="列出模型")
     sub.add_parser("list-available-models", help="列出可用模型")
     lm_p = sub.add_parser("list-model-providers", help="列出模型供应商的模型列表（平台端点当前不可用）")
