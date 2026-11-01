@@ -238,6 +238,22 @@ def cmd_logout(client: MonkeyCodeClient) -> None:
     print("已退出登录")
 
 
+def cmd_team_login(client: MonkeyCodeClient) -> None:
+    """团队管理员登录（PoW 验证码由 SDK 自动求解）。"""
+    try:
+        client.team_login()
+        print("团队登录成功")
+    except Exception as e:
+        print(f"团队登录失败：{e}")
+        sys.exit(1)
+
+
+def cmd_team_logout(client: MonkeyCodeClient) -> None:
+    """退出团队会话。"""
+    client.team_logout()
+    print("已退出团队登录")
+
+
 def cmd_list_tasks(client: MonkeyCodeClient, limit: int = 10, full: bool = False) -> None:
     """列出最近任务（含时间，可选完整内容）。"""
     data = client.list_tasks(size=limit)
@@ -827,6 +843,17 @@ def cmd_git_identity_delete(client: MonkeyCodeClient, identity_id: str) -> None:
         print_json(result)
 
 
+def cmd_download_file(
+    client: MonkeyCodeClient, vm_id: str, path: str, filename: str, output: str | None
+) -> None:
+    """下载 VM 文件并写入本地磁盘。"""
+    data = client.download_file(vm_id, path, filename)
+    target = output or filename
+    with open(target, "wb") as f:
+        f.write(data)
+    print(f"已下载 {len(data)} 字节 -> {target}")
+
+
 def cmd_list_models(client: MonkeyCodeClient) -> None:
     """列出模型并按页面分类分组显示（每条已标注是否付费）。"""
     models = client.list_models()
@@ -953,6 +980,27 @@ def _str2bool(v: str) -> bool:
     raise argparse.ArgumentTypeError(f"无效布尔值：{v}")
 
 
+def _csv_list(v):
+    """接受逗号分隔或 JSON 数组，返回 list。"""
+    if isinstance(v, list):
+        return v
+    s = str(v).strip()
+    if s.startswith("["):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return parsed
+        except ValueError:
+            pass
+    return [x.strip() for x in s.split(",") if x.strip()]
+
+
+def _read_bytes(v):
+    """bytes 参数从本地文件路径读取。"""
+    with open(v, "rb") as f:
+        return f.read()
+
+
 def _coerce_scalar(v: str):
     """把 --set 字符串值转为 int/float/bool/JSON/str。"""
     s = v.strip()
@@ -985,6 +1033,10 @@ def _arg_type(annotation):
         return _str2bool if ann is bool else int
     if ann is float:
         return float
+    if ann is list or getattr(ann, "__origin__", None) is list:
+        return _csv_list
+    if ann is bytes:
+        return _read_bytes
     return str
 
 
@@ -995,6 +1047,7 @@ def _auto_title_keys() -> tuple[str, ...]:
         "email",
         "title",
         "model",
+        "model_name",
         "model_id",
         "id",
         "repo_name",
@@ -1018,8 +1071,15 @@ def _auto_detail_keys() -> tuple[str, ...]:
         "description",
         "platform",
         "status",
+        "status_text",
         "plan",
         "role",
+        "type",
+        "enabled",
+        "is_default",
+        "is_public",
+        "quota",
+        "points",
         "created_at",
     )
 
@@ -1095,7 +1155,167 @@ def _auto_item_line(item) -> str:
     return " | ".join(parts)
 
 
+def _print_key_value(result) -> None:
+    """把单对象结果按 key: value 逐行打印（适合 dashboard/config 等）。"""
+    if not isinstance(result, dict):
+        print_json(result)
+        return
+    for k, v in result.items():
+        if isinstance(v, (dict, list)):
+            print(f"{k}: {json.dumps(v, ensure_ascii=False)[:160]}")
+        else:
+            print(f"{k}: {v}")
+
+
+def _print_url(result) -> None:
+    """打印授权/登录 URL（字符串或含 url 字段的对象）。"""
+    if isinstance(result, str):
+        print(result)
+        return
+    if isinstance(result, dict):
+        url = result.get("url") or result.get("authorize_url") or result.get("data")
+        if isinstance(url, str):
+            print(url)
+            return
+    print_json(result)
+
+
+def _print_tree(result, depth: int = 0) -> None:
+    """把项目/文件树按缩进打印。"""
+    items = _auto_items(result)
+    if items is None:
+        if isinstance(result, dict):
+            items = result.get("children")
+    if not items:
+        _print_key_value(result)
+        return
+    for it in items:
+        if isinstance(it, dict):
+            name = (
+                it.get("name")
+                or it.get("path")
+                or it.get("filename")
+                or it.get("id")
+                or ""
+            )
+            type_ = str(it.get("type") or it.get("kind") or "")
+            label = str(name)
+            if type_ and type_ not in ("file", "blob", ""):
+                label += f" [{type_}]"
+            print("  " * depth + label)
+            if it.get("children"):
+                _print_tree(it["children"], depth + 1)
+        else:
+            print("  " * depth + str(it))
+
+
+def _print_file_content(result) -> None:
+    """打印项目/仓库文件内容。"""
+    if isinstance(result, dict):
+        content = result.get("content")
+        if isinstance(content, str):
+            print(content)
+            return
+    print_json(result)
+
+
+def _print_stream(result) -> None:
+    """打印流式对象的关键属性（交互式操作需在 Python 中使用）。"""
+    if isinstance(result, dict):
+        _print_key_value(result)
+        return
+    attrs: dict[str, str] = {}
+    for a in (
+        "terminal_id",
+        "task_id",
+        "session_id",
+        "connected",
+        "url",
+        "id",
+        "status",
+    ):
+        v = getattr(result, a, None)
+        if v is not None:
+            attrs[a] = str(v)
+    if attrs:
+        for k, v in attrs.items():
+            print(f"{k}: {v}")
+        print("（流式会话已建立；交互式读写请在 Python 中使用对应 Stream 对象）")
+    else:
+        print(repr(result)[:300])
+
+
+def _print_attrs(result) -> None:
+    """打印对象公开属性（dataclass 等），优先用 raw 字典。"""
+    if isinstance(result, dict):
+        _print_key_value(result)
+        return
+    raw = getattr(result, "raw", None)
+    if isinstance(raw, dict):
+        _print_key_value(raw)
+        return
+    for a in dir(result):
+        if a.startswith("_") or callable(getattr(result, a, None)):
+            continue
+        print(f"{a}: {getattr(result, a)}")
+
+
+def _print_task(result) -> None:
+    """打印任务终态概要。"""
+    task_id = getattr(result, "id", None)
+    status = getattr(result, "status", None)
+    if task_id is not None:
+        print(f"task_id={task_id}")
+    if status is not None:
+        print(f"status={status}")
+    raw = getattr(result, "raw", None)
+    if isinstance(raw, dict):
+        print_json(raw)
+
+
+_SPECIAL_PRINTERS: dict[str, object] = {
+    "team_get_dashboard": _print_key_value,
+    "team_admin_initialize": _print_key_value,
+    "get_server_config": _print_key_value,
+    "get_public_stats": _print_key_value,
+    "get_subscription": _print_key_value,
+    "get_license_status": _print_key_value,
+    "get_license_machine_code": _print_key_value,
+    "get_user_status": _print_key_value,
+    "team_get_user_status": _print_key_value,
+    "team_get_vm_idle_policy": _print_key_value,
+    "team_get_oidc": _print_key_value,
+    "get_task_options": _print_key_value,
+    "get_wallet": _print_key_value,
+    "get_project_tree": _print_tree,
+    "get_project_file": _print_file_content,
+    "get_task_repo_files": _print_tree,
+    "get_task_repo_diff": _print_file_content,
+    "read_task_repo_file": _print_file_content,
+    "build_oauth_login_url": _print_url,
+    "build_oidc_login_url": _print_url,
+    "get_gitea_authorize_url": _print_url,
+    "get_gitee_authorize_url": _print_url,
+    "get_gitlab_authorize_url": _print_url,
+    "get_cnb_authorize_url": _print_url,
+    "get_model_health_check": _print_key_value,
+    "team_get_model_health_check": _print_key_value,
+    "open_terminal": _print_stream,
+    "join_terminal": _print_stream,
+    "open_task_stream": _print_stream,
+    "open_task_control": _print_stream,
+    "create_captcha": _print_attrs,
+    "redeem_captcha": _print_attrs,
+    "wait_task": _print_task,
+    "create_api_key": _print_attrs,
+}
+
+
 def _print_auto_result(method_name: str, result) -> None:
+    printer = _SPECIAL_PRINTERS.get(method_name)
+    if printer is not None:
+        printer(result)
+        return
     if result is None:
         print("OK")
         return
@@ -1142,6 +1362,7 @@ _AUTO_SKIP = {
     "login",
     "logout",
     "whoami",
+    "paginate",  # 需要 Python 回调 fetcher，CLI 无法表达
 }
 
 # 显式子命令以独立命名（如 git-identity-add、mcp-list）覆盖了方法本身
@@ -1157,6 +1378,8 @@ _AUTO_SKIP_ALIASES = {
     "delete-mcp-upstream",
     "sync-mcp-upstream",
     "set-mcp-tool",
+    "create-api-key",
+    "delete-api-key",
 }
 
 
@@ -1230,6 +1453,10 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
             cmd_whoami(client)
         elif args.command == "logout":
             cmd_logout(client)
+        elif args.command == "team-login":
+            cmd_team_login(client)
+        elif args.command == "team-logout":
+            cmd_team_logout(client)
         elif args.command == "list-hosts":
             cmd_list_hosts(client)
         elif args.command == "list-images":
@@ -1275,6 +1502,10 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
             )
         elif args.command == "git-identity-delete":
             cmd_git_identity_delete(client, args.identity_id)
+        elif args.command == "download-file":
+            cmd_download_file(
+                client, args.vm_id, args.path, args.filename, args.output
+            )
         elif args.command == "list-models":
             cmd_list_models(client)
         elif args.command == "list-available-models":
@@ -1441,6 +1672,8 @@ def main() -> None:
     sub.add_parser("login", help="登录并保存会话")
     sub.add_parser("whoami", help="显示当前登录账户信息")
     sub.add_parser("logout", help="退出当前会话")
+    sub.add_parser("team-login", help="团队管理员登录")
+    sub.add_parser("team-logout", help="退出团队会话")
     sub.add_parser("list-hosts", help="列出云端环境")
     sub.add_parser("list-images", help="列出镜像")
     sub.add_parser("mcp-list", help="列出 MCP 上游")
@@ -1480,6 +1713,11 @@ def main() -> None:
     giu.add_argument("--organization-id", default=None, help="新组织 ID")
     gid = sub.add_parser("git-identity-delete", help="删除 Git 身份")
     gid.add_argument("identity_id", help="身份 ID")
+    df = sub.add_parser("download-file", help="下载 VM 文件到本地")
+    df.add_argument("vm_id", help="VM ID")
+    df.add_argument("path", help="远程文件路径")
+    df.add_argument("filename", help="远程文件名")
+    df.add_argument("--output", default=None, help="本地保存路径（默认=filename）")
     sub.add_parser("list-models", help="列出模型")
     sub.add_parser("list-available-models", help="列出可用模型")
     lm_p = sub.add_parser("list-model-providers", help="列出模型供应商的模型列表（平台端点当前不可用）")

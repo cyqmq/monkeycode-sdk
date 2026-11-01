@@ -75,3 +75,74 @@ def test_coerce_scalar():
     assert cli._coerce_scalar("false") is False
     assert cli._coerce_scalar("hello") == "hello"
     assert cli._coerce_scalar('{"a": 1}') == {"a": 1}
+
+
+def test_csv_list():
+    assert cli._csv_list("a,b,c") == ["a", "b", "c"]
+    assert cli._csv_list('["x","y"]') == ["x", "y"]
+    assert cli._csv_list(["z"]) == ["z"]
+    assert cli._csv_list("") == []
+
+
+def test_read_bytes(tmp_path):
+    f = tmp_path / "a.bin"
+    f.write_bytes(b"\x01\x02")
+    assert cli._read_bytes(str(f)) == b"\x01\x02"
+
+
+def test_arg_type_mapping():
+    assert cli._arg_type(int) is int
+    assert cli._arg_type(bool) is cli._str2bool
+    assert cli._arg_type(float) is float
+    assert cli._arg_type(list) is cli._csv_list
+    assert cli._arg_type(bytes) is cli._read_bytes
+    assert cli._arg_type(str) is str
+
+
+def test_download_file_command(tmp_path):
+    """download-file 命令把字节写入磁盘。"""
+    class FakeClient:
+        def download_file(self, vm_id, path, filename):
+            return b"data"
+
+    out = tmp_path / "out.txt"
+    cli.cmd_download_file(
+        FakeClient(), "vm1", "/x", "f.txt", str(out)  # type: ignore[arg-type]
+    )
+    assert out.read_bytes() == b"data"
+
+
+def test_print_url_str(capsys):
+    cli._print_auto_result("build_oauth_login_url", "https://x/authorize")
+    assert "https://x/authorize" in capsys.readouterr().out
+
+
+def test_print_key_value(capsys):
+    cli._print_auto_result("get_server_config", {"a": 1, "b": [1, 2]})
+    out = capsys.readouterr().out
+    assert "a: 1" in out
+
+
+def test_auto_dispatch_async_method(capsys):
+    """async 方法经 asyncio.run 调用。"""
+    calls = {}
+
+    class FakeClient:
+        async def sync_client_ip(self, task_id, ip, timeout=30.0):
+            calls["task_id"] = task_id
+            calls["ip"] = ip
+            return {"ok": True}
+
+    args = argparse.Namespace(
+        command="sync-client-ip",
+        _method_name="sync_client_ip",
+        _positional=["task_id", "ip"],
+        _optional=["timeout"],
+        _has_vk=False,
+        timeout=None,
+    )
+    args.task_id = "t1"
+    args.ip = "1.2.3.4"
+    cli._auto_dispatch(FakeClient(), args)  # type: ignore[arg-type]
+    assert calls == {"task_id": "t1", "ip": "1.2.3.4"}
+    assert "ok" in capsys.readouterr().out

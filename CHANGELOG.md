@@ -1,5 +1,14 @@
 # 更新日志
 
+## [1.21.0] - 2026-11-01
+
+### 打磨（CLI 全量子命令体验）
+- **团队管理**：`team-login`/`team-logout` 独立命令；team dashboard/admin/oidc/vm-idle-policy/用户状态按 key-value 输出
+- **Git/项目/Issue/模型/通知**：`list[str]` 参数（share_git_bot、model_health_check 等）接受逗号分隔/JSON；授权/登录 URL 直印（6 个 authorize/oauth/oidc）；项目树缩进打印（get_project_tree）；文件内容直印（get_project_file/repo diff/read_task_repo_file）；模型健康检查 key-value
+- **VM/文件/终端**：`download-file` 写盘（--output）；bytes 参数自动读本地文件（upload_object 等）；终端/任务流对象打印关键属性 + 交互提示
+- **账号/认证/订阅/License**：`create-api-key`/`delete-api-key` 并入 `api-key` 子命令；captcha/wait_task/API key 对象按属性输出
+- **通用**：`paginate`（需 Python 回调）不再暴露；`_SPECIAL_PRINTERS` 机制按方法定向格式化
+
 ## [1.20.0] - 2026-11-01
 
 ### 新增
