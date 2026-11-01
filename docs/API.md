@@ -67,7 +67,7 @@
 | `get_task_options(self)` | 聚合创建任务所需的下拉选项，一次返回 |
 | `get_task_repo_changes(self, task_id: str, timeout: float=30.0)` | 获取任务仓库变更列表（kind=repo_file_changes） |
 | `get_task_repo_diff(self, task_id: str, path: str, timeout: float=30.0)` | 获取任务仓库文件 diff（kind=repo_file_diff） |
-| `get_task_rounds(self, task_id: str, cursor: str | None=None, limit: int=2, direction: str='backward', inclusive: bool | None=None)` | 查询任务历史轮次 |
+| `get_task_rounds(self, task_id: str, cursor: str | None=None, limit: int=2, direction: str='backward', inclusive: bool | None=None)` | 查询任务历史轮次（limit 按轮次而非 chunk，每轮可含上百条 chunk；输出截断需调用侧处理） |
 | `get_task_user_inputs(self, task_id: str, cursor: str | None=None, limit: int=20)` | 查询任务用户输入列表 |
 | `get_user_status(self)` | 获取当前登录用户身份/状态（whoami 底层接口） |
 | `get_vm(self, vm_id: str)` | 获取虚拟机详情 |

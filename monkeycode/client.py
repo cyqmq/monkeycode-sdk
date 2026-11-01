@@ -1666,7 +1666,12 @@ class MonkeyCodeClient:
         direction: str = "backward",
         inclusive: bool | None = None,
     ) -> Any:
-        """查询任务历史轮次。"""
+        """查询任务历史轮次。
+
+        注意：limit 按「轮次」而非 chunk 计数——每轮可含上百条 chunk，
+        实际返回的 chunk 数远大于 limit（如 limit=2 可能返回 400+ 条）。
+        如需限制输出条数，请在调用侧按 chunk 截断（CLI rounds 用 --chunks）。
+        """
         params: dict[str, Any] = {
             "id": task_id,
             "limit": limit,
