@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import inspect
 import json
 import os
 import sys
 import time
+from collections.abc import Generator
 from pathlib import Path
 
 from monkeycode import (
@@ -937,6 +939,290 @@ def cmd_restart(client: MonkeyCodeClient, task_id: str) -> None:
     print_json(result)
 
 
+def _kebab(name: str) -> str:
+    """snake_case -> kebab-case。"""
+    return name.replace("_", "-")
+
+
+def _str2bool(v: str) -> bool:
+    s = str(v).strip().lower()
+    if s in ("1", "true", "t", "yes", "y", "on"):
+        return True
+    if s in ("0", "false", "f", "no", "n", "off"):
+        return False
+    raise argparse.ArgumentTypeError(f"无效布尔值：{v}")
+
+
+def _coerce_scalar(v: str):
+    """把 --set 字符串值转为 int/float/bool/JSON/str。"""
+    s = v.strip()
+    if not s:
+        return ""
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    if s.lower() in ("true", "false"):
+        return s.lower() == "true"
+    if s.startswith(("{", "[")):
+        try:
+            return json.loads(s)
+        except ValueError:
+            pass
+    return s
+
+
+def _arg_type(annotation):
+    """根据类型注解选择 argparse type。"""
+    ann = annotation
+    if isinstance(ann, str):
+        return str
+    if ann is int or ann is bool:
+        return _str2bool if ann is bool else int
+    if ann is float:
+        return float
+    return str
+
+
+def _auto_title_keys() -> tuple[str, ...]:
+    return (
+        "name",
+        "username",
+        "email",
+        "title",
+        "model",
+        "model_id",
+        "id",
+        "repo_name",
+        "full_name",
+        "tool_name",
+        "tool_id",
+        "key",
+        "login",
+        "host_id",
+        "vm_id",
+        "url",
+    )
+
+
+def _auto_detail_keys() -> tuple[str, ...]:
+    return (
+        "email",
+        "url",
+        "base_url",
+        "remark",
+        "description",
+        "platform",
+        "status",
+        "plan",
+        "role",
+        "created_at",
+    )
+
+
+_CONTAINER_KEYS = (
+    "upstreams",
+    "identities",
+    "hosts",
+    "images",
+    "models",
+    "projects",
+    "tasks",
+    "users",
+    "groups",
+    "skills",
+    "notify_channels",
+    "channels",
+    "sites",
+    "oauth_sites",
+    "members",
+    "invitations",
+    "plugins",
+    "audits",
+    "conversations",
+    "extension_packages",
+    "playground_posts",
+    "bots",
+    "git_bots",
+    "repos",
+    "list",
+    "items",
+    "results",
+    "records",
+)
+
+
+def _auto_items(result) -> list | None:
+    """从返回结构中提取列表项，无法识别返回 None。"""
+    if isinstance(result, Generator):
+        result = list(result)
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict):
+        for key in _CONTAINER_KEYS:
+            val = result.get(key)
+            if isinstance(val, list):
+                return val
+        if isinstance(result.get("data"), list):
+            return result["data"]
+    return None
+
+
+def _auto_item_line(item) -> str:
+    if not isinstance(item, dict):
+        return str(item)
+    title = ""
+    tid = ""
+    for key in _auto_title_keys():
+        val = item.get(key)
+        if val not in (None, "", []):
+            title = str(val)
+            tid = key
+            break
+    parts = [title or "—"]
+    if tid and tid != "id" and item.get("id") and str(item.get("id")) != title:
+        parts[-1] = f"{title} ({item['id']})"
+    for key in _auto_detail_keys():
+        if key == tid:
+            continue
+        val = item.get(key)
+        if val not in (None, "", [], {}):
+            parts.append(f"{key}={str(val)[:50]}")
+    return " | ".join(parts)
+
+
+def _print_auto_result(method_name: str, result) -> None:
+    if result is None:
+        print("OK")
+        return
+    items = _auto_items(result)
+    if items is not None:
+        print(f"共 {len(items)} 条")
+        for it in items:
+            print(_auto_item_line(it))
+        return
+    try:
+        print_json(result)
+    except TypeError:
+        print(repr(result)[:300])
+
+
+def _auto_dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
+    """自动分发到 SDK 方法（内省生成子命令的兜底）。"""
+    method = getattr(client, args._method_name, None)
+    if method is None or not callable(method):
+        print(f"未知命令：{args.command}")
+        sys.exit(1)
+    pos = [getattr(args, p) for p in (args._positional or [])]
+    kwargs: dict[str, Any] = {}
+    for p in args._optional or []:
+        v = getattr(args, p, None)
+        if v is not None:
+            kwargs[p] = v
+    if args._has_vk:
+        for kv in getattr(args, "_set_kv", None) or []:
+            k, _, v = kv.partition("=")
+            kwargs[k.strip()] = _coerce_scalar(v)
+        raw = getattr(args, "_json", None)
+        if raw:
+            kwargs.update(json.loads(raw))
+    result = method(*pos, **kwargs)
+    if inspect.isawaitable(result):
+        result = asyncio.run(result)
+    _print_auto_result(args._method_name, result)
+
+
+_AUTO_SKIP = {
+    "close",
+    "is_logged_in",
+    "login",
+    "logout",
+    "whoami",
+}
+
+# 显式子命令以独立命名（如 git-identity-add、mcp-list）覆盖了方法本身
+# （add_git_identity、list_mcp_upstreams），避免自动生成重复命令。
+_AUTO_SKIP_ALIASES = {
+    "list-git-identities",
+    "add-git-identity",
+    "update-git-identity",
+    "delete-git-identity",
+    "list-mcp-upstreams",
+    "create-mcp-upstream",
+    "update-mcp-upstream",
+    "delete-mcp-upstream",
+    "sync-mcp-upstream",
+    "set-mcp-tool",
+}
+
+
+def _register_auto_subcommands(sub: argparse._SubParsersAction) -> None:
+    """为每个未显式覆盖的公共方法生成通用子命令。"""
+    for name in dir(MonkeyCodeClient):
+        if name.startswith("_") or name in _AUTO_SKIP:
+            continue
+        cmd_name = _kebab(name)
+        if cmd_name in sub.choices or cmd_name in _AUTO_SKIP_ALIASES:
+            continue
+        method = getattr(MonkeyCodeClient, name)
+        if not callable(method):
+            continue
+        try:
+            sig = inspect.signature(method)
+        except (ValueError, TypeError):
+            continue
+        params = [q for q in sig.parameters.values() if q.name != "self"]
+        has_vk = any(q.kind == q.VAR_KEYWORD for q in params)
+        positional: list[str] = []
+        optional: list[str] = []
+        sp = sub.add_parser(
+            cmd_name,
+            help=(
+                inspect.getdoc(method) or f"调用 SDK {name}()"
+            ).splitlines()[0],
+        )
+        for param in params:
+            if param.kind == param.VAR_KEYWORD or param.kind == param.VAR_POSITIONAL:
+                continue
+            dest = param.name
+            ann = param.annotation
+            if param.default is inspect.Parameter.empty:
+                positional.append(dest)
+                sp.add_argument(dest, type=_arg_type(ann))
+            else:
+                optional.append(dest)
+                flag = "--" + _kebab(dest)
+                if ann is bool and param.default is False:
+                    sp.add_argument(flag, action="store_true")
+                else:
+                    sp.add_argument(flag, default=None, type=_arg_type(ann))
+        if has_vk:
+            sp.add_argument(
+                "--set",
+                dest="_set_kv",
+                action="append",
+                default=None,
+                metavar="K=V",
+                help="设置字段（可重复），如 --set enabled=true",
+            )
+            sp.add_argument(
+                "--json",
+                dest="_json",
+                default=None,
+                help="以 JSON 传入整个请求体（覆盖 --set）",
+            )
+        sp.set_defaults(
+            _method_name=name,
+            _positional=positional,
+            _optional=optional,
+            _has_vk=has_vk,
+        )
+
+
 def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
     """按子命令分发执行；捕获异常打印友好错误而不是 Traceback。"""
     try:
@@ -1048,6 +1334,8 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
             cmd_run(client, args.content)
         elif args.command == "links":
             cmd_links(client, args.task_id)
+        else:
+            _auto_dispatch(client, args)
     except (APIError, TaskError) as e:
         print(f"❌ {e}")
         sys.exit(1)
@@ -1254,6 +1542,9 @@ def main() -> None:
 
     sub.add_parser("version", help="显示当前 SDK 版本")
     sub.add_parser("update", help="检查并更新 SDK 到最新版")
+
+    # 为所有未显式覆盖的 SDK 公共方法生成通用子命令
+    _register_auto_subcommands(sub)
 
     args = parser.parse_args()
     if args.command == "version":
