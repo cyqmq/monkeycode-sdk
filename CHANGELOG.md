@@ -1,5 +1,10 @@
 # 更新日志
 
+## [1.21.2] - 2026-11-01
+
+### 修复
+- **B6c `git-identity-add`/`git-identity-update` 参数遮蔽全局 `--base-url`**：子命令 `base_url`（add 位置参数）与 `--base-url`（update 选项）与全局 `--base-url` 同名，运行时被覆盖为 None，`MonkeyCodeClient(base_url=None)` 触发 `'NoneType' object has no attribute 'rstrip'`。改名 `git-identity-add` 位置参数为 `provider_base_url`、`git-identity-update` 选项为 `--new-base-url`（与 B1 `list-model-providers` 同法）。
+
 ## [1.21.1] - 2026-11-01
 
 ### 修复

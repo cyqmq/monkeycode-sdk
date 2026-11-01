@@ -1488,7 +1488,7 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
             cmd_git_identity_add(
                 client,
                 args.access_token,
-                args.base_url,
+                args.provider_base_url,
                 args.email,
                 args.platform,
                 args.username,
@@ -1500,7 +1500,7 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
                 client,
                 args.identity_id,
                 args.access_token,
-                args.base_url,
+                args.new_base_url,
                 args.email,
                 args.platform,
                 args.username,
@@ -1703,7 +1703,7 @@ def main() -> None:
     sub.add_parser("git-identity-list", help="列出 Git 身份")
     gia = sub.add_parser("git-identity-add", help="添加 Git 身份")
     gia.add_argument("access_token", help="访问令牌")
-    gia.add_argument("base_url", help="仓库地址（如 https://github.com）")
+    gia.add_argument("provider_base_url", help="仓库地址（如 https://github.com）")
     gia.add_argument("email", help="Git 提交邮箱")
     gia.add_argument("platform", help="平台（github/gitlab 等）")
     gia.add_argument("username", help="用户名")
@@ -1712,7 +1712,7 @@ def main() -> None:
     giu = sub.add_parser("git-identity-update", help="更新 Git 身份")
     giu.add_argument("identity_id", help="身份 ID")
     giu.add_argument("--access-token", default=None, help="新访问令牌")
-    giu.add_argument("--base-url", default=None, help="新仓库地址")
+    giu.add_argument("--new-base-url", default=None, help="新仓库地址")
     giu.add_argument("--email", default=None, help="新提交邮箱")
     giu.add_argument("--platform", default=None, help="新平台")
     giu.add_argument("--username", default=None, help="新用户名")

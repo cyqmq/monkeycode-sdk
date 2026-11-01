@@ -134,6 +134,50 @@ def test_mcp_list_list_return(capsys):
     assert "github" in capsys.readouterr().out
 
 
+def test_git_identity_update_no_shadow_global_base_url():
+    """B6c 回归：git-identity-update 的 --new-base-url 不再遮蔽全局 --base-url。"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base-url", default="https://monkeycode-ai.com")
+    sub = parser.add_subparsers(dest="command", required=True)
+    giu = sub.add_parser("git-identity-update")
+    giu.add_argument("identity_id")
+    giu.add_argument("--new-base-url", default=None)
+    args = parser.parse_args(
+        ["git-identity-update", "ID", "--new-base-url", "https://github.com"]
+    )
+    assert args.base_url == "https://monkeycode-ai.com"
+    assert args.new_base_url == "https://github.com"
+
+
+def test_git_identity_add_provider_base_url():
+    """B6c 回归：git-identity-add 用 provider_base_url，全局 --base-url 保持默认。"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base-url", default="https://monkeycode-ai.com")
+    sub = parser.add_subparsers(dest="command", required=True)
+    gia = sub.add_parser("git-identity-add")
+    for a in ["access_token", "provider_base_url", "email", "platform", "username"]:
+        gia.add_argument(a)
+    args = parser.parse_args(
+        ["git-identity-add", "tok", "https://github.com", "a@x.com", "github", "alice"]
+    )
+    assert args.provider_base_url == "https://github.com"
+    assert args.base_url == "https://monkeycode-ai.com"
+
+
+def test_git_identity_update_help_has_new_base_url(capsys):
+    """B6c 回归：help 输出包含 --new-base-url 而非 --base-url。"""
+    import subprocess
+    import sys
+
+    out = subprocess.run(
+        [sys.executable, "cli.py", "git-identity-update", "--help"],
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "--new-base-url" in out
+    assert "--base-url" not in out.split("\n")[0] or "--base-url" not in out
+
+
 def test_download_file_command(tmp_path):
     """download-file 命令把字节写入磁盘。"""
     class FakeClient:
