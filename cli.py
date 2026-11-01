@@ -493,6 +493,8 @@ def cmd_wallet_tx(client: MonkeyCodeClient) -> None:
         remark = str(
             tx.get("remark") or tx.get("description") or ""
         )[:40]
+        if "MCP 工具" in remark and io == "支出":
+            remark += "（按次计费）"
         created = _fmt_ts(tx.get("created_at") or tx.get("time"))
         print(f"[{io}] {sign}{points} 点  {created}  {remark}")
 
