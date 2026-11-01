@@ -37,7 +37,7 @@ from monkeycode.stream import (
     round_tool_title,
 )
 
-__version__ = "1.16.0"
+__version__ = "1.17.0"
 
 __all__ = [
     "MonkeyCodeClient",

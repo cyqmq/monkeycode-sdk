@@ -801,6 +801,74 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _ver_tuple(v: str) -> tuple[int, ...]:
+    """把版本字符串转为可比较的元组（如 '1.16.0' -> (1,16,0)）。"""
+    parts = []
+    for p in v.split("."):
+        num = ""
+        for ch in p:
+            if ch.isdigit():
+                num += ch
+            else:
+                break
+        parts.append(int(num) if num else 0)
+    return tuple(parts)
+
+
+def cmd_sdk_version() -> None:
+    """显示当前 SDK 版本。"""
+    import monkeycode
+
+    print(getattr(monkeycode, "__version__", "unknown"))
+
+
+def cmd_sdk_update() -> None:
+    """检查并升级 SDK 到最新版（从 PyPI 查询）。"""
+    import json
+    import subprocess
+    import sys
+    import urllib.request
+
+    import monkeycode
+
+    cur = str(getattr(monkeycode, "__version__", "unknown"))
+    print(f"当前 SDK 版本：{cur}")
+    try:
+        with urllib.request.urlopen(
+            "https://pypi.org/pypi/monkeycode-sdk/json", timeout=10
+        ) as resp:
+            info = json.load(resp)
+        latest = str(info["info"]["version"])
+    except Exception as e:
+        print(f"检查最新版本失败：{e}")
+        print("请手动执行：pip install --upgrade monkeycode-sdk")
+        return
+    print(f"最新 SDK 版本：{latest}")
+    if _ver_tuple(cur) >= _ver_tuple(latest):
+        if _ver_tuple(cur) > _ver_tuple(latest):
+            print("当前版本高于 PyPI 最新版（可能尚未发布），无需更新。")
+        else:
+            print("已是最新版本。")
+        return
+    print(f"开始升级 {cur} → {latest} ...")
+    try:
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "monkeycode-sdk",
+            ],
+            timeout=300,
+        )
+        print(f"升级完成，当前版本：{latest}")
+    except Exception as e:
+        print(f"升级失败：{e}")
+        print("请手动执行：pip install --upgrade monkeycode-sdk")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="MonkeyCode SDK CLI")
     parser.add_argument(
@@ -880,7 +948,16 @@ def main() -> None:
     restart_p = sub.add_parser("restart", help="重启任务")
     restart_p.add_argument("task_id", help="任务 ID")
 
+    sub.add_parser("version", help="显示当前 SDK 版本")
+    sub.add_parser("update", help="检查并更新 SDK 到最新版")
+
     args = parser.parse_args()
+    if args.command == "version":
+        cmd_sdk_version()
+        return
+    if args.command == "update":
+        cmd_sdk_update()
+        return
     email, password = get_credentials(args.session)
     with MonkeyCodeClient(
         email=email,
