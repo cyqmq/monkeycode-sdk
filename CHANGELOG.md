@@ -1,5 +1,10 @@
 # 更新日志
 
+## [1.21.1] - 2026-11-01
+
+### 修复
+- **B6 `git-identity-list` / `mcp-list` / `wallet-tx` 崩溃**：`list_git_identities` 等实际返回裸 `list`（非 dict），原提取写法 `data.get(...) or ... or (data if isinstance(data, list) else [])` 先对 list 调 `.get` 抛 `AttributeError`，isinstance 兜底永远够不到。新增 `_extract_items()` 安全提取（兼容裸 list / dict 容器 / data-list 包裹），三处全部替换。
+
 ## [1.21.0] - 2026-11-01
 
 ### 打磨（CLI 全量子命令体验）

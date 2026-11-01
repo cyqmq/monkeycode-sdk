@@ -467,15 +467,32 @@ def cmd_checkin(client: MonkeyCodeClient) -> None:
         print_json(data)
 
 
+def _extract_items(data, *keys) -> list:
+    """安全提取列表项：兼容裸 list、dict 容器（指定 keys）、data/list/items 包裹。
+
+    修复反模式「data.get(...) or ... or (data if isinstance(data, list) else [])」——
+    该写法对裸 list 会先调 .get 崩溃，isinstance 兜底永远够不到。
+    """
+    if data is None:
+        return []
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in keys:
+            val = data.get(key)
+            if isinstance(val, list):
+                return val
+        for key in ("data", "list", "items", "results", "records"):
+            val = data.get(key)
+            if isinstance(val, list):
+                return val
+    return []
+
+
 def cmd_wallet_tx(client: MonkeyCodeClient) -> None:
     """查看钱包交易记录（收支方向 + 时间格式化）。"""
     data = client.get_wallet_transactions()
-    txs = (
-        data.get("list")
-        or data.get("transactions")
-        or data.get("items")
-        or (data if isinstance(data, list) else [])
-    )
+    txs = _extract_items(data, "list", "transactions", "items")
     if not txs:
         print("暂无交易记录。")
         return
@@ -659,12 +676,7 @@ def _mcp_line(u: dict) -> str:
 def cmd_mcp_list(client: MonkeyCodeClient) -> None:
     """列出 MCP 上游。"""
     data = client.list_mcp_upstreams()
-    items = (
-        data.get("upstreams")
-        or data.get("list")
-        or data.get("items")
-        or (data if isinstance(data, list) else [])
-    )
+    items = _extract_items(data, "upstreams", "list", "items")
     if not items:
         print("暂无 MCP 上游。")
         return
@@ -761,12 +773,7 @@ def _git_identity_line(g: dict) -> str:
 def cmd_git_identity_list(client: MonkeyCodeClient) -> None:
     """列出 Git 身份。"""
     data = client.list_git_identities()
-    items = (
-        data.get("identities")
-        or data.get("list")
-        or data.get("items")
-        or (data if isinstance(data, list) else [])
-    )
+    items = _extract_items(data, "identities", "list", "items")
     if not items:
         print("暂无 Git 身份。")
         return

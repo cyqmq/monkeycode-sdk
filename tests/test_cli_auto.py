@@ -99,6 +99,41 @@ def test_arg_type_mapping():
     assert cli._arg_type(str) is str
 
 
+def test_extract_items_list():
+    """B6 回归：裸 list 返回值不应触发 .get 崩溃。"""
+    assert cli._extract_items([{"id": 1}], "identities") == [{"id": 1}]
+
+
+def test_extract_items_dict():
+    assert cli._extract_items({"identities": [{"id": 1}]}, "identities") == [
+        {"id": 1}
+    ]
+    assert cli._extract_items({"list": [1, 2]}, "identities", "list") == [1, 2]
+    assert cli._extract_items(None, "identities") == []
+
+
+def test_git_identity_list_list_return(capsys):
+    """B6 回归：list_git_identities 返回裸 list 时 git-identity-list 不崩溃。"""
+
+    class FakeClient:
+        def list_git_identities(self):
+            return [{"id": "1", "username": "alice", "email": "a@x.com"}]
+
+    cli.cmd_git_identity_list(FakeClient())  # type: ignore[arg-type]
+    assert "alice" in capsys.readouterr().out
+
+
+def test_mcp_list_list_return(capsys):
+    """B6 回归：list_mcp_upstreams 返回裸 list 时 mcp-list 不崩溃。"""
+
+    class FakeClient:
+        def list_mcp_upstreams(self):
+            return [{"id": "u1", "name": "github"}]
+
+    cli.cmd_mcp_list(FakeClient())  # type: ignore[arg-type]
+    assert "github" in capsys.readouterr().out
+
+
 def test_download_file_command(tmp_path):
     """download-file 命令把字节写入磁盘。"""
     class FakeClient:
