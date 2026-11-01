@@ -851,22 +851,32 @@ def cmd_sdk_update() -> None:
             print("已是最新版本。")
         return
     print(f"开始升级 {cur} → {latest} ...")
-    try:
-        subprocess.check_call(
+    import shutil
+
+    cmds: list[list[str]] = [
+        [sys.executable, "-m", "pip", "install", "--upgrade", "monkeycode-sdk"],
+    ]
+    if shutil.which("uv"):
+        cmds.append(
             [
-                sys.executable,
-                "-m",
+                shutil.which("uv"),
                 "pip",
                 "install",
+                "--python",
+                sys.executable,
                 "--upgrade",
                 "monkeycode-sdk",
-            ],
-            timeout=300,
+            ]
         )
-        print(f"升级完成，当前版本：{latest}")
-    except Exception as e:
-        print(f"升级失败：{e}")
-        print("请手动执行：pip install --upgrade monkeycode-sdk")
+    for cmd in cmds:
+        try:
+            subprocess.check_call(cmd, timeout=300)
+            print(f"升级完成，当前版本：{latest}")
+            return
+        except Exception:
+            continue
+    print("升级失败（pip 与 uv 均失败）。")
+    print("请手动执行：pip install --upgrade monkeycode-sdk")
 
 
 def main() -> None:
