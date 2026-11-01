@@ -1,5 +1,13 @@
 # 更新日志
 
+## [1.18.0] - 2026-10-31
+
+### 新增
+- **CLI MCP 管理**：`mcp-list` / `mcp-create` / `mcp-update` / `mcp-delete` / `mcp-sync` / `mcp-tool <id> on|off`（覆盖 SDK 的 MCP 上游 CRUD + 同步 + 工具启停，此前仅 Python API 可用）
+
+### 修复
+- **宿主「公共/自建」误判**：`_host_line` 增补 `owner.type == "public"` 判定（前端以 `owner.type` 区分公共/团队/自建，SDK 此前只看 `is_public/is_shared/type`，公共宿主全显示自建）
+
 ## [1.17.0] - 2026-10-31
 
 ### 新增

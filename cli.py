@@ -109,6 +109,14 @@ def _fmt_mem(mem) -> str:
     return str(mem)
 
 
+def _owner_type(h: dict) -> str:
+    """提取宿主/模型 owner.type（private/public/team）。"""
+    owner = h.get("owner")
+    if isinstance(owner, dict):
+        return str(owner.get("type") or "")
+    return str(getattr(owner, "type", "") if hasattr(owner, "type") else "")
+
+
 def _host_line(h: dict) -> str:
     hid = str(h.get("id") or "")
     name = str(h.get("name") or h.get("hostname") or hid)
@@ -125,6 +133,7 @@ def _host_line(h: dict) -> str:
         h.get("is_public")
         or h.get("is_shared")
         or str(h.get("type") or "").lower() == "public"
+        or _owner_type(h) == "public"
     )
     parts = [f"{name} ({hid})", status]
     if specs:
@@ -609,6 +618,105 @@ def cmd_list_images(client: MonkeyCodeClient) -> None:
         print(line)
 
 
+def _mcp_line(u: dict) -> str:
+    uid = str(u.get("id") or "")
+    name = str(u.get("name") or uid)
+    url = str(u.get("url") or "")
+    enabled = u.get("enabled", True)
+    tool_count = u.get("tool_count") or u.get("tools_count") or ""
+    parts = [f"{name} ({uid})"]
+    if url:
+        parts.append(url[:60])
+    if tool_count:
+        parts.append(f"工具 {tool_count}")
+    parts.append("启用" if enabled else "停用")
+    remark = u.get("remark") or u.get("description") or ""
+    if remark:
+        parts.append(str(remark)[:40])
+    return " | ".join(parts)
+
+
+def cmd_mcp_list(client: MonkeyCodeClient) -> None:
+    """列出 MCP 上游。"""
+    data = client.list_mcp_upstreams()
+    items = (
+        data.get("upstreams")
+        or data.get("list")
+        or data.get("items")
+        or (data if isinstance(data, list) else [])
+    )
+    if not items:
+        print("暂无 MCP 上游。")
+        return
+    for u in items or []:
+        if isinstance(u, dict):
+            print(_mcp_line(u))
+        else:
+            print_json(u)
+
+
+def cmd_mcp_create(
+    client: MonkeyCodeClient, name: str, url: str, headers: str | None
+) -> None:
+    """创建 MCP 上游。"""
+    header_dict: dict[str, str] | None = None
+    if headers:
+        header_dict = {}
+        for pair in headers.split(","):
+            if ":" in pair:
+                k, v = pair.split(":", 1)
+                header_dict[k.strip()] = v.strip()
+    result = client.create_mcp_upstream(name, url, headers=header_dict)
+    print_json(result)
+
+
+def cmd_mcp_update(
+    client: MonkeyCodeClient,
+    upstream_id: str,
+    name: str | None,
+    url: str | None,
+    headers: str | None,
+) -> None:
+    """更新 MCP 上游。"""
+    fields: dict[str, Any] = {}
+    if name:
+        fields["name"] = name
+    if url:
+        fields["url"] = url
+    if headers:
+        header_dict: dict[str, str] = {}
+        for pair in headers.split(","):
+            if ":" in pair:
+                k, v = pair.split(":", 1)
+                header_dict[k.strip()] = v.strip()
+        fields["headers"] = header_dict
+    if not fields:
+        print("未提供任何要更新的字段。")
+        return
+    result = client.update_mcp_upstream(upstream_id, **fields)
+    print_json(result)
+
+
+def cmd_mcp_delete(client: MonkeyCodeClient, upstream_id: str) -> None:
+    """删除 MCP 上游。"""
+    result = client.delete_mcp_upstream(upstream_id)
+    if result is None or result == {}:
+        print(f"已删除 MCP 上游：{upstream_id}")
+    else:
+        print_json(result)
+
+
+def cmd_mcp_sync(client: MonkeyCodeClient, upstream_id: str) -> None:
+    """同步 MCP 上游。"""
+    print_json(client.sync_mcp_upstream(upstream_id))
+
+
+def cmd_mcp_tool(client: MonkeyCodeClient, tool_id: str, enabled: bool) -> None:
+    """启用/关闭 MCP 工具。"""
+    result = client.set_mcp_tool(tool_id, enabled)
+    print_json(result)
+
+
 def cmd_list_models(client: MonkeyCodeClient) -> None:
     """列出模型并按页面分类分组显示（每条已标注是否付费）。"""
     models = client.list_models()
@@ -732,6 +840,20 @@ def _dispatch(client: MonkeyCodeClient, args: argparse.Namespace) -> None:
             cmd_list_hosts(client)
         elif args.command == "list-images":
             cmd_list_images(client)
+        elif args.command == "mcp-list":
+            cmd_mcp_list(client)
+        elif args.command == "mcp-create":
+            cmd_mcp_create(client, args.name, args.url, args.header)
+        elif args.command == "mcp-update":
+            cmd_mcp_update(
+                client, args.upstream_id, args.name, args.url, args.header
+            )
+        elif args.command == "mcp-delete":
+            cmd_mcp_delete(client, args.upstream_id)
+        elif args.command == "mcp-sync":
+            cmd_mcp_sync(client, args.upstream_id)
+        elif args.command == "mcp-tool":
+            cmd_mcp_tool(client, args.tool_id, args.enabled == "on")
         elif args.command == "list-models":
             cmd_list_models(client)
         elif args.command == "list-available-models":
@@ -898,6 +1020,23 @@ def main() -> None:
     sub.add_parser("logout", help="退出当前会话")
     sub.add_parser("list-hosts", help="列出云端环境")
     sub.add_parser("list-images", help="列出镜像")
+    sub.add_parser("mcp-list", help="列出 MCP 上游")
+    mcp_c = sub.add_parser("mcp-create", help="创建 MCP 上游")
+    mcp_c.add_argument("name", help="上游名称")
+    mcp_c.add_argument("url", help="上游 URL")
+    mcp_c.add_argument("--header", default=None, help="请求头，逗号分隔 K:V")
+    mcp_u = sub.add_parser("mcp-update", help="更新 MCP 上游")
+    mcp_u.add_argument("upstream_id", help="上游 ID")
+    mcp_u.add_argument("--name", default=None, help="新名称")
+    mcp_u.add_argument("--url", default=None, help="新 URL")
+    mcp_u.add_argument("--header", default=None, help="请求头，逗号分隔 K:V")
+    mcp_d = sub.add_parser("mcp-delete", help="删除 MCP 上游")
+    mcp_d.add_argument("upstream_id", help="上游 ID")
+    mcp_s = sub.add_parser("mcp-sync", help="同步 MCP 上游")
+    mcp_s.add_argument("upstream_id", help="上游 ID")
+    mcp_t = sub.add_parser("mcp-tool", help="启用/关闭 MCP 工具")
+    mcp_t.add_argument("tool_id", help="工具 ID")
+    mcp_t.add_argument("enabled", choices=["on", "off"], help="on=启用 off=关闭")
     sub.add_parser("list-models", help="列出模型")
     sub.add_parser("list-available-models", help="列出可用模型")
     lm_p = sub.add_parser("list-model-providers", help="列出模型供应商的模型列表（平台端点当前不可用）")
